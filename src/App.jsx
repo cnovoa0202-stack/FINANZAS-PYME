@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 
 const SUPABASE_URL = "https://mgvaguwofeyscbwifyjq.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ndmFndXdvZmV5c2Nid2lmeWpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0MjUxOTEsImV4cCI6MjA5MTAwMTE5MX0.nxJyVi8acRWHQBYT5dPPO1tNoGaD3PXr-6KbO0uYz_M";
+const SECRET = "NOVRUCN";
 
 const C = {
   bg:"#0a0c14",card:"#12151f",card2:"#1a1d2e",border:"#232636",
@@ -9,11 +10,11 @@ const C = {
   danger:"#ff4d6d",dangerDim:"#ff4d6d15",dangerBorder:"#ff4d6d35",
   warn:"#ffd166",warnDim:"#ffd16615",
   text:"#e8eaf0",muted:"#7b7f9a",dim:"#3a3d52",
+  overlay:"rgba(0,0,0,0.7)",
 };
 
 const fmt=(n)=>`S/ ${Number(n||0).toLocaleString("es-PE",{minimumFractionDigits:2})}`;
 const todayStr=()=>new Date().toISOString().split("T")[0];
-
 const headers={apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`,"Content-Type":"application/json"};
 
 async function dbGet(negocio,mes){
@@ -22,7 +23,7 @@ async function dbGet(negocio,mes){
 }
 async function dbInsert(row){
   const res=await fetch(`${SUPABASE_URL}/rest/v1/registros`,{method:"POST",headers:{...headers,Prefer:"return=representation"},body:JSON.stringify(row)});
-  if(!res.ok){const e=await res.text();console.error("Insert error:",e);return null;}
+  if(!res.ok)return null;
   return(await res.json())[0];
 }
 async function dbDelete(id){
@@ -46,6 +47,13 @@ export default function App(){
   const [loadingIA,setLoadingIA]=useState(false);
   const [error,setError]=useState("");
 
+  // Drawer & password
+  const [drawerOpen,setDrawerOpen]=useState(false);
+  const [showPassModal,setShowPassModal]=useState(false);
+  const [passInput,setPassInput]=useState("");
+  const [passError,setPassError]=useState("");
+  const [unlocked,setUnlocked]=useState(false);
+
   const currentMonth=selectedDate.slice(0,7);
   const mesLabel=new Date(currentMonth+"-02").toLocaleString("es-PE",{month:"long",year:"numeric"});
 
@@ -53,7 +61,7 @@ export default function App(){
     async function load(){
       setLoadingData(true);setError("");
       try{const data=await dbGet(negocio,currentMonth);setAllItems(data||[]);}
-      catch(e){setError("Error al cargar datos. Verifica tu conexión.");}
+      catch{setError("Error al cargar datos.");}
       setLoadingData(false);
     }
     load();
@@ -83,6 +91,20 @@ export default function App(){
     setAllItems(prev=>prev.filter(i=>i.id!==id));
   }
 
+  function handleInformeClick(){
+    if(unlocked){setView("report");setDrawerOpen(false);}
+    else{setShowPassModal(true);setPassInput("");setPassError("");}
+  }
+
+  function handlePassSubmit(){
+    if(passInput===SECRET){
+      setUnlocked(true);setShowPassModal(false);
+      setView("report");setDrawerOpen(false);
+    } else {
+      setPassError("Contraseña incorrecta. Intenta de nuevo.");
+    }
+  }
+
   async function generarInforme(){
     if(allItems.length===0||loadingIA)return;
     setLoadingIA(true);setInforme("");
@@ -98,7 +120,7 @@ export default function App(){
 
 Secciones:
 📋 RESUMEN DEL MES
-💰 ANÁLISIS DE INGRESOS  
+💰 ANÁLISIS DE INGRESOS
 💸 ANÁLISIS DE EGRESOS
 📊 RESULTADO FINAL
 ✅ 3 RECOMENDACIONES CONCRETAS
@@ -120,6 +142,7 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
     app:{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'DM Sans',sans-serif"},
     header:{background:C.card,borderBottom:`1px solid ${C.border}`,padding:"14px 18px",display:"flex",alignItems:"center",gap:12,position:"sticky",top:0,zIndex:50},
     logo:{width:34,height:34,background:`linear-gradient(135deg,${C.accent},#00b8d4)`,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:"#0a0c14",flexShrink:0},
+    menuBtn:{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:22,padding:"4px 8px",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center"},
     nav:{display:"flex",gap:3,background:C.card2,borderRadius:12,padding:4,margin:"14px 18px 0"},
     navBtn:(a)=>({flex:1,padding:"9px 6px",borderRadius:9,border:"none",background:a?C.accent:"transparent",color:a?"#0a0c14":C.muted,fontWeight:a?700:500,fontSize:12,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}),
     body:{padding:"14px 18px 80px"},
@@ -141,7 +164,29 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
     empty:{textAlign:"center",color:C.dim,fontSize:13,padding:"22px 0",fontStyle:"italic"},
     spinner:{width:15,height:15,border:`2px solid ${C.border}`,borderTop:`2px solid ${C.accent}`,borderRadius:"50%",animation:"spin 0.8s linear infinite",display:"inline-block"},
     acumCard:{background:C.accentDim,border:`1px solid ${C.accentBorder}`,borderRadius:12,padding:"12px 14px",marginTop:4},
-    errBox:{background:"#ff4d6d15",border:"1px solid #ff4d6d35",borderRadius:9,padding:"10px 14px",fontSize:13,color:C.danger,marginBottom:10},
+    errBox:{background:C.dangerDim,border:`1px solid ${C.dangerBorder}`,borderRadius:9,padding:"10px 14px",fontSize:13,color:C.danger,marginBottom:10},
+
+    // Drawer
+    drawerOverlay:{position:"fixed",inset:0,background:C.overlay,zIndex:100,display:"flex",justifyContent:"flex-end"},
+    drawer:{width:260,background:C.card2,borderLeft:`1px solid ${C.border}`,height:"100%",padding:"24px 0",display:"flex",flexDirection:"column"},
+    drawerHeader:{padding:"0 20px 20px",borderBottom:`1px solid ${C.border}`,marginBottom:12},
+    drawerTitle:{fontSize:16,fontWeight:800,color:C.text},
+    drawerSub:{fontSize:11,color:C.muted,marginTop:2},
+    drawerItem:(active)=>({display:"flex",alignItems:"center",gap:12,padding:"14px 20px",cursor:"pointer",background:active?"#ffffff08":"transparent",borderLeft:active?`3px solid ${C.accent}`:"3px solid transparent",transition:"all 0.2s"}),
+    drawerItemIcon:{fontSize:18},
+    drawerItemText:{fontSize:14,fontWeight:600,color:C.text},
+    drawerItemSub:{fontSize:11,color:C.muted,marginTop:1},
+    drawerLock:{marginLeft:"auto",fontSize:14,color:C.muted},
+
+    // Modal
+    modalOverlay:{position:"fixed",inset:0,background:C.overlay,zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 20px"},
+    modal:{background:C.card2,border:`1px solid ${C.border}`,borderRadius:16,padding:24,width:"100%",maxWidth:340},
+    modalTitle:{fontSize:16,fontWeight:800,marginBottom:4},
+    modalSub:{fontSize:13,color:C.muted,marginBottom:20},
+    modalInp:{background:C.bg,border:`1px solid ${C.border}`,borderRadius:9,color:C.text,fontSize:16,padding:"12px 14px",outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"'DM Sans',sans-serif",letterSpacing:"3px",textAlign:"center"},
+    modalErr:{fontSize:12,color:C.danger,marginTop:8,textAlign:"center"},
+    modalBtn:{width:"100%",background:C.accent,border:"none",borderRadius:9,color:"#0a0c14",fontSize:14,fontWeight:700,padding:"12px",cursor:"pointer",marginTop:12,fontFamily:"'DM Sans',sans-serif"},
+    modalCancel:{width:"100%",background:"transparent",border:`1px solid ${C.border}`,borderRadius:9,color:C.muted,fontSize:14,padding:"10px",cursor:"pointer",marginTop:8,fontFamily:"'DM Sans',sans-serif"},
   };
 
   return(
@@ -152,9 +197,12 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
         input:focus,select:focus{border-color:#00e5a0!important;outline:none}
         @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
         .fade{animation:fadeIn 0.3s ease}
+        @keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+        .slide{animation:slideIn 0.25s ease}
         @keyframes spin{to{transform:rotate(360deg)}}
       `}</style>
 
+      {/* HEADER */}
       <div style={s.header}>
         <div style={s.logo}>F</div>
         <div style={{flex:1}}>
@@ -171,22 +219,24 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
             </div>
           )}
         </div>
-        <select style={{...s.inp,width:"auto",padding:"6px 9px",fontSize:11}} value={regimen} onChange={e=>setRegimen(e.target.value)}>
+        <select style={{...s.inp,width:"auto",padding:"6px 9px",fontSize:11,marginRight:6}} value={regimen} onChange={e=>setRegimen(e.target.value)}>
           <option value="NRUS">NRUS</option><option value="RER">RER</option>
           <option value="RMT">RMT</option><option value="General">General</option>
           <option value="Informal">Informal</option>
         </select>
+        <button style={s.menuBtn} onClick={()=>setDrawerOpen(true)}>☰</button>
       </div>
 
+      {/* NAV */}
       <div style={s.nav}>
         <button style={s.navBtn(view==="daily")} onClick={()=>setView("daily")}>📝 Diario</button>
         <button style={s.navBtn(view==="history")} onClick={()=>setView("history")}>📅 Historial</button>
-        <button style={s.navBtn(view==="report")} onClick={()=>setView("report")}>📊 Informe IA</button>
       </div>
 
       <div style={s.body}>
         {error&&<div style={s.errBox}>⚠️ {error}</div>}
 
+        {/* DAILY */}
         {view==="daily"&&(
           <div className="fade">
             <span style={s.lbl}>Fecha de registro</span>
@@ -212,11 +262,9 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
             </div>
             <span style={s.lbl}>Movimientos del día</span>
             <div style={s.card}>
-              {loadingData?(
-                <div style={{...s.empty,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><div style={s.spinner}/> Cargando...</div>
-              ):dayItems.length===0?(
-                <div style={s.empty}>Sin registros para este día</div>
-              ):dayItems.map((item,idx)=>(
+              {loadingData?(<div style={{...s.empty,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><div style={s.spinner}/> Cargando...</div>)
+              :dayItems.length===0?(<div style={s.empty}>Sin registros para este día</div>)
+              :dayItems.map((item,idx)=>(
                 <div key={item.id} style={{...s.itemRow,borderBottom:idx===dayItems.length-1?"none":`1px solid ${C.border}`}}>
                   <div style={s.dot(item.tipo)}/><span style={{flex:1,fontSize:13}}>{item.descripcion}</span>
                   <span style={{fontSize:13,fontWeight:700,color:item.tipo==="ingreso"?C.accent:C.danger,marginRight:8}}>{fmt(item.monto)}</span>
@@ -235,6 +283,7 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
           </div>
         )}
 
+        {/* HISTORY */}
         {view==="history"&&(
           <div className="fade">
             <span style={s.lbl}>Mes a revisar</span>
@@ -244,11 +293,9 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
               <div style={s.sumBox("r")}><div style={s.sumLbl}>Egresos</div><div style={s.sumVal("r")}>{fmt(monthEgresos)}</div></div>
               <div style={s.sumBox(monthNet>=0?"g":"r")}><div style={s.sumLbl}>{monthNet>=0?"Ganancia":"Pérdida"}</div><div style={s.sumVal(monthNet>=0?"g":"r")}>{fmt(Math.abs(monthNet))}</div></div>
             </div>
-            {loadingData?(
-              <div style={{...s.empty,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><div style={s.spinner}/> Cargando...</div>
-            ):dateGroups.length===0?(
-              <div style={s.empty}>No hay registros en este mes</div>
-            ):dateGroups.map(date=>{
+            {loadingData?(<div style={{...s.empty,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><div style={s.spinner}/> Cargando...</div>)
+            :dateGroups.length===0?(<div style={s.empty}>No hay registros en este mes</div>)
+            :dateGroups.map(date=>{
               const items=allItems.filter(r=>r.fecha===date);
               const ing=items.filter(r=>r.tipo==="ingreso").reduce((s,r)=>s+Number(r.monto),0);
               const egr=items.filter(r=>r.tipo==="egreso").reduce((s,r)=>s+Number(r.monto),0);
@@ -275,6 +322,7 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
           </div>
         )}
 
+        {/* REPORT */}
         {view==="report"&&(
           <div className="fade">
             <div style={{...s.acumCard,marginBottom:14}}>
@@ -288,25 +336,64 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
               </div>
             </div>
             <button style={s.genBtn(allItems.length===0||loadingIA)} onClick={generarInforme} disabled={allItems.length===0||loadingIA}>
-              {loadingIA?"⏳ Analizando tu negocio...":"✨ Generar Informe Mensual con IA"}
+              {loadingIA?"⏳ Generando informe...":"📄 Generar Informe Mensual"}
             </button>
-            {loadingIA&&(
-              <div style={{display:"flex",alignItems:"center",gap:10,color:C.muted,fontSize:13,padding:"18px 0"}}>
-                <div style={s.spinner}/> Claude está analizando todos tus registros...
-              </div>
-            )}
+            {loadingIA&&(<div style={{display:"flex",alignItems:"center",gap:10,color:C.muted,fontSize:13,padding:"18px 0"}}><div style={s.spinner}/> Procesando todos los registros...</div>)}
             {informe&&!loadingIA&&(
               <div style={s.reportBox}>
                 <div style={{fontSize:11,fontWeight:700,color:C.accent,letterSpacing:"1.5px",textTransform:"uppercase",marginBottom:12}}>📊 {negocio} · {mesLabel}</div>
                 {informe}
               </div>
             )}
-            {!informe&&!loadingIA&&(
-              <div style={s.empty}>{allItems.length===0?"Primero registra movimientos diarios para generar el informe":"Presiona el botón para analizar este mes con IA"}</div>
-            )}
+            {!informe&&!loadingIA&&(<div style={s.empty}>{allItems.length===0?"Primero registra movimientos diarios":"Presiona el botón para generar el informe"}</div>)}
           </div>
         )}
       </div>
+
+      {/* DRAWER */}
+      {drawerOpen&&(
+        <div style={s.drawerOverlay} onClick={()=>setDrawerOpen(false)}>
+          <div style={s.drawer} className="slide" onClick={e=>e.stopPropagation()}>
+            <div style={s.drawerHeader}>
+              <div style={s.drawerTitle}>Menú</div>
+              <div style={s.drawerSub}>FinanzasPyme</div>
+            </div>
+
+            <div style={s.drawerItem(view==="daily")} onClick={()=>{setView("daily");setDrawerOpen(false);}}>
+              <span style={s.drawerItemIcon}>📝</span>
+              <div><div style={s.drawerItemText}>Registro Diario</div><div style={s.drawerItemSub}>Ingresos y egresos del día</div></div>
+            </div>
+
+            <div style={s.drawerItem(view==="history")} onClick={()=>{setView("history");setDrawerOpen(false);}}>
+              <span style={s.drawerItemIcon}>📅</span>
+              <div><div style={s.drawerItemText}>Historial</div><div style={s.drawerItemSub}>Movimientos por mes</div></div>
+            </div>
+
+            <div style={{...s.drawerItem(view==="report"),marginTop:"auto"}} onClick={handleInformeClick}>
+              <span style={s.drawerItemIcon}>📊</span>
+              <div style={{flex:1}}>
+                <div style={s.drawerItemText}>Informe Mensual</div>
+                <div style={s.drawerItemSub}>Análisis de rentabilidad</div>
+              </div>
+              {!unlocked&&<span style={s.drawerLock}>🔒</span>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PASSWORD MODAL */}
+      {showPassModal&&(
+        <div style={s.modalOverlay}>
+          <div style={s.modal}>
+            <div style={s.modalTitle}>🔒 Acceso restringido</div>
+            <div style={s.modalSub}>Esta sección es solo para el administrador. Ingresa la contraseña para continuar.</div>
+            <input style={s.modalInp} type="password" value={passInput} onChange={e=>setPassInput(e.target.value)} placeholder="••••••••" onKeyDown={e=>e.key==="Enter"&&handlePassSubmit()} autoFocus/>
+            {passError&&<div style={s.modalErr}>{passError}</div>}
+            <button style={s.modalBtn} onClick={handlePassSubmit}>Ingresar</button>
+            <button style={s.modalCancel} onClick={()=>setShowPassModal(false)}>Cancelar</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
