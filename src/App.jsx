@@ -24,7 +24,7 @@ const C = {
 };
 
 const fmt = (n) => `S/ ${Number(n || 0).toLocaleString("es-PE", { minimumFractionDigits: 2 })}`;
-const todayStr = () => new Date().toISOString().split("T")[0];
+const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
 async function dbGet(negocio, mes) {
@@ -128,7 +128,7 @@ export default function App() {
     setSaving(true); setError("");
     const row = { negocio, fecha: selectedDate, descripcion: desc.trim(), monto: Number(monto), tipo };
     const saved = await dbInsert(row);
-    if (saved) { setAllItems(prev => [...prev, saved]); setDesc(""); setMonto(""); }
+    if (saved) { const fresh = await dbGet(negocio, currentMonth); setAllItems(fresh || []); setDesc(""); setMonto(""); }
     else setError("No se pudo guardar. Intenta de nuevo.");
     setSaving(false);
   }
