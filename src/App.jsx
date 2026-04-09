@@ -29,7 +29,7 @@ const headers = {
 async function dbGet(negocio, mes) {
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/registros?negocio=eq.${encodeURIComponent(negocio)}&fecha=gte.${mes}-01&fecha=lte.${mes}-31&order=fecha.asc,id.asc`,
+      `${SUPABASE_URL}/rest/v1/registros?negocio=eq.${encodeURIComponent(negocio)}&fecha=gte.${mes}-01&fecha=lte.${mes}-31&order=fecha,id`,
       { headers }
     );
     if (!res.ok) return [];
