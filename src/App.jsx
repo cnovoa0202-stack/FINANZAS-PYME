@@ -8,23 +8,17 @@ const C = {
   bg: "#f4f6fb", white: "#ffffff", border: "#e8edf5",
   accent: "#2563eb", accentLight: "#eff6ff", accentBorder: "#bfdbfe",
   success: "#16a34a", successLight: "#f0fdf4", successBorder: "#bbf7d0",
+  yape: "#7c3aed", yapeLight: "#f5f3ff", yapeBorder: "#ddd6fe",
   danger: "#dc2626", dangerLight: "#fff1f2", dangerBorder: "#fecdd3",
   text: "#0f172a", muted: "#64748b", dim: "#cbd5e1", overlay: "rgba(15,23,42,0.5)",
 };
 
 const fmt = (n) => `S/ ${Number(n || 0).toLocaleString("es-PE", { minimumFractionDigits: 2 })}`;
-
-// Fecha local correcta para Perú
 const todayStr = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
-
-const headers = {
-  apikey: SUPABASE_KEY,
-  Authorization: `Bearer ${SUPABASE_KEY}`,
-  "Content-Type": "application/json",
-};
+const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
 async function dbGet(negocio, mes) {
   try {
@@ -35,9 +29,9 @@ async function dbGet(negocio, mes) {
       `${SUPABASE_URL}/rest/v1/registros?select=*&negocio=eq.${encodeURIComponent(negocio)}&fecha=gte.${mes}-01&fecha=lte.${lastDate}&order=id.asc`,
       { headers }
     );
-    if (!res.ok) { console.error("dbGet error", res.status, await res.text()); return []; }
+    if (!res.ok) return [];
     return await res.json();
-  } catch(e) { console.error("dbGet exception", e); return []; }
+  } catch { return []; }
 }
 
 async function dbInsert(row) {
@@ -53,19 +47,18 @@ async function dbInsert(row) {
 
 async function dbDelete(id) {
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/registros?id=eq.${id}`, {
-      method: "DELETE", headers,
-    });
+    await fetch(`${SUPABASE_URL}/rest/v1/registros?id=eq.${id}`, { method: "DELETE", headers });
   } catch {}
 }
 
 function BarChart({ allItems, currentMonth }) {
-  const daysInMonth = new Date(currentMonth.slice(0, 4), currentMonth.slice(5, 7), 0).getDate();
+  const [year, month] = currentMonth.split("-").map(Number);
+  const daysInMonth = new Date(year, month, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => {
     const d = String(i + 1).padStart(2, "0");
     const dateStr = `${currentMonth}-${d}`;
     const items = allItems.filter(r => r.fecha === dateStr);
-    const ing = items.filter(r => r.tipo === "ingreso").reduce((s, r) => s + Number(r.monto), 0);
+    const ing = items.filter(r => r.tipo === "ingreso" || r.tipo === "ingreso-yape").reduce((s, r) => s + Number(r.monto), 0);
     const egr = items.filter(r => r.tipo === "egreso").reduce((s, r) => s + Number(r.monto), 0);
     return { day: i + 1, ing, egr };
   });
@@ -92,6 +85,12 @@ function BarChart({ allItems, currentMonth }) {
   );
 }
 
+// Gastos fijos por defecto
+const DEFAULT_FIXED = [
+  { id: "alquiler", label: "Alquiler", monto: 500, icon: "🏠" },
+  { id: "internet", label: "Internet", monto: 20, icon: "📶" },
+];
+
 export default function App() {
   const [view, setView] = useState("daily");
   const [negocio, setNegocio] = useState("Librería");
@@ -114,6 +113,10 @@ export default function App() {
   const [passError, setPassError] = useState("");
   const [unlocked, setUnlocked] = useState(false);
 
+  // Gastos fijos editables
+  const [fixedExpenses, setFixedExpenses] = useState(DEFAULT_FIXED);
+  const [editingFixed, setEditingFixed] = useState(null);
+
   const currentMonth = selectedDate.slice(0, 7);
   const mesLabel = new Date(currentMonth + "-02").toLocaleString("es-PE", { month: "long", year: "numeric" });
 
@@ -127,10 +130,10 @@ export default function App() {
   useEffect(() => { loadData(); }, [currentMonth, negocio]);
 
   const dayItems = allItems.filter(r => r.fecha === selectedDate);
-  const dayIngresos = dayItems.filter(r => r.tipo === "ingreso").reduce((s, r) => s + Number(r.monto), 0);
+  const dayIngresos = dayItems.filter(r => r.tipo === "ingreso" || r.tipo === "ingreso-yape").reduce((s, r) => s + Number(r.monto), 0);
   const dayEgresos = dayItems.filter(r => r.tipo === "egreso").reduce((s, r) => s + Number(r.monto), 0);
   const dayNet = dayIngresos - dayEgresos;
-  const monthIngresos = allItems.filter(r => r.tipo === "ingreso").reduce((s, r) => s + Number(r.monto), 0);
+  const monthIngresos = allItems.filter(r => r.tipo === "ingreso" || r.tipo === "ingreso-yape").reduce((s, r) => s + Number(r.monto), 0);
   const monthEgresos = allItems.filter(r => r.tipo === "egreso").reduce((s, r) => s + Number(r.monto), 0);
   const monthNet = monthIngresos - monthEgresos;
   const dateGroups = [...new Set(allItems.map(r => r.fecha))].sort((a, b) => b.localeCompare(a));
@@ -140,12 +143,19 @@ export default function App() {
     setSaving(true); setError("");
     const row = { negocio, fecha: selectedDate, descripcion: desc.trim(), monto: Number(monto), tipo };
     const ok = await dbInsert(row);
-    if (ok) {
-      setDesc(""); setMonto("");
-      await loadData();
-    } else {
-      setError("No se pudo guardar. Verifica tu conexión.");
-    }
+    if (ok) { setDesc(""); setMonto(""); await loadData(); }
+    else setError("No se pudo guardar. Verifica tu conexión.");
+    setSaving(false);
+  }
+
+  // Registrar gasto fijo con un toque
+  async function addFixedExpense(fixed) {
+    if (saving) return;
+    setSaving(true); setError("");
+    const row = { negocio, fecha: selectedDate, descripcion: fixed.label, monto: fixed.monto, tipo: "egreso" };
+    const ok = await dbInsert(row);
+    if (ok) await loadData();
+    else setError("No se pudo guardar.");
     setSaving(false);
   }
 
@@ -170,17 +180,20 @@ export default function App() {
     const sortedDates = [...new Set(allItems.map(r => r.fecha))].sort((a, b) => b.localeCompare(a));
     const desglose = sortedDates.map(d => {
       const items = allItems.filter(r => r.fecha === d);
-      const ing = items.filter(r => r.tipo === "ingreso").reduce((s, r) => s + Number(r.monto), 0);
+      const ing = items.filter(r => r.tipo === "ingreso" || r.tipo === "ingreso-yape").reduce((s, r) => s + Number(r.monto), 0);
       const egr = items.filter(r => r.tipo === "egreso").reduce((s, r) => s + Number(r.monto), 0);
       const lbl = new Date(d + "T12:00:00").toLocaleDateString("es-PE", { weekday: "short", day: "numeric", month: "short" });
       return `${lbl}: Ingresos S/${ing.toFixed(2)}, Egresos S/${egr.toFixed(2)}, Neto S/${(ing - egr).toFixed(2)}`;
     }).join("\n");
-    const detalle = allItems.map(i => `• [${i.tipo.toUpperCase()}] ${i.descripcion}: S/${Number(i.monto).toFixed(2)}`).join("\n");
+    const detalle = allItems.map(i => {
+      const tipoLabel = i.tipo === "ingreso-yape" ? "INGRESO YAPE" : i.tipo.toUpperCase();
+      return `• [${tipoLabel}] ${i.descripcion}: S/${Number(i.monto).toFixed(2)}`;
+    }).join("\n");
     const prompt = `Eres un asesor financiero experto en pequeñas empresas peruanas. Genera un informe de rentabilidad mensual claro y amigable. USA EMOJIS. Español peruano sencillo.
 
 Secciones:
 📋 RESUMEN DEL MES
-💰 ANÁLISIS DE INGRESOS
+💰 ANÁLISIS DE INGRESOS (diferencia entre efectivo y Yape si aplica)
 💸 ANÁLISIS DE EGRESOS
 📊 RESULTADO FINAL
 ✅ 3 RECOMENDACIONES CONCRETAS
@@ -192,8 +205,7 @@ DETALLE:\n${detalle}
 TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFixed(2)} | Neto S/${monthNet.toFixed(2)} (${monthNet >= 0 ? "GANANCIA" : "PÉRDIDA"})`;
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
       });
       const json = await res.json();
@@ -206,6 +218,18 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
   const card = { background: C.white, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, marginBottom: 12 };
   const lbl = { fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 8, display: "block" };
   const spinner = { width: 15, height: 15, border: `2px solid ${C.border}`, borderTop: `2px solid ${C.accent}`, borderRadius: "50%", animation: "spin 0.8s linear infinite" };
+
+  // Color por tipo de item
+  function itemColor(tipo) {
+    if (tipo === "ingreso") return C.success;
+    if (tipo === "ingreso-yape") return C.yape;
+    return C.danger;
+  }
+  function itemLabel(tipo) {
+    if (tipo === "ingreso") return "Efectivo";
+    if (tipo === "ingreso-yape") return "Yape";
+    return "Egreso";
+  }
 
   function SumBox({ label, value, color, bg, border }) {
     return (
@@ -227,6 +251,7 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
         @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
         .slide { animation: slideIn 0.25s ease; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        .quick-btn:active { transform: scale(0.96); }
       `}</style>
 
       {/* HEADER */}
@@ -280,33 +305,93 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
               <SumBox label="Neto día" value={Math.abs(dayNet)} color={dayNet >= 0 ? C.success : C.danger} bg={dayNet >= 0 ? C.successLight : C.dangerLight} border={dayNet >= 0 ? C.successBorder : C.dangerBorder} />
             </div>
 
+            {/* FORM */}
             <div style={card}>
               <span style={{ ...lbl, marginBottom: 10 }}>Nuevo movimiento</span>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
-                <button onClick={() => setTipo("ingreso")} style={{ padding: "10px", border: `1px solid ${tipo === "ingreso" ? C.successBorder : C.border}`, borderRadius: 9, background: tipo === "ingreso" ? C.successLight : C.white, color: tipo === "ingreso" ? C.success : C.muted, fontWeight: tipo === "ingreso" ? 700 : 500, fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>✅ Ingreso</button>
-                <button onClick={() => setTipo("egreso")} style={{ padding: "10px", border: `1px solid ${tipo === "egreso" ? C.dangerBorder : C.border}`, borderRadius: 9, background: tipo === "egreso" ? C.dangerLight : C.white, color: tipo === "egreso" ? C.danger : C.muted, fontWeight: tipo === "egreso" ? 700 : 500, fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>❌ Egreso</button>
+
+              {/* Tipo selector - 3 opciones */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
+                <button onClick={() => setTipo("ingreso")} style={{ padding: "10px 6px", border: `1px solid ${tipo === "ingreso" ? C.successBorder : C.border}`, borderRadius: 9, background: tipo === "ingreso" ? C.successLight : C.white, color: tipo === "ingreso" ? C.success : C.muted, fontWeight: tipo === "ingreso" ? 700 : 500, fontSize: 12, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
+                  💵 Efectivo
+                </button>
+                <button onClick={() => setTipo("ingreso-yape")} style={{ padding: "10px 6px", border: `1px solid ${tipo === "ingreso-yape" ? C.yapeBorder : C.border}`, borderRadius: 9, background: tipo === "ingreso-yape" ? C.yapeLight : C.white, color: tipo === "ingreso-yape" ? C.yape : C.muted, fontWeight: tipo === "ingreso-yape" ? 700 : 500, fontSize: 12, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
+                  📱 Yape
+                </button>
+                <button onClick={() => setTipo("egreso")} style={{ padding: "10px 6px", border: `1px solid ${tipo === "egreso" ? C.dangerBorder : C.border}`, borderRadius: 9, background: tipo === "egreso" ? C.dangerLight : C.white, color: tipo === "egreso" ? C.danger : C.muted, fontWeight: tipo === "egreso" ? 700 : 500, fontSize: 12, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
+                  ❌ Egreso
+                </button>
               </div>
-              <input style={{ ...inp, marginBottom: 8 }} value={desc} onChange={e => setDesc(e.target.value)} placeholder={tipo === "ingreso" ? "Ej: Ventas del día, cuadernos..." : "Ej: Alquiler, luz, mercadería..."} onKeyDown={e => e.key === "Enter" && addItem()} />
+
+              {/* Gastos fijos rápidos - solo cuando es egreso */}
+              {tipo === "egreso" && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 8 }}>⚡ Gastos fijos</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {fixedExpenses.map(fx => (
+                      <div key={fx.id} style={{ display: "flex", alignItems: "center", gap: 0, background: C.dangerLight, border: `1px solid ${C.dangerBorder}`, borderRadius: 9, overflow: "hidden" }}>
+                        <button
+                          className="quick-btn"
+                          onClick={() => { setDesc(fx.label); setMonto(String(fx.monto)); }}
+                          style={{ padding: "8px 12px", background: "transparent", border: "none", color: C.danger, fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", display: "flex", alignItems: "center", gap: 5 }}
+                        >
+                          {fx.icon} {fx.label} <span style={{ fontWeight: 800 }}>{fmt(fx.monto)}</span>
+                        </button>
+                        <button
+                          onClick={() => setEditingFixed(fx.id === editingFixed ? null : fx.id)}
+                          style={{ padding: "8px 8px", background: "transparent", border: "none", borderLeft: `1px solid ${C.dangerBorder}`, color: C.muted, cursor: "pointer", fontSize: 12 }}
+                        >✏️</button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Editor de monto fijo */}
+                  {editingFixed && (
+                    <div style={{ marginTop: 10, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, padding: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 8 }}>
+                        Editar monto: {fixedExpenses.find(f => f.id === editingFixed)?.label}
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <input
+                          style={{ ...inp, flex: 1 }}
+                          type="number"
+                          defaultValue={fixedExpenses.find(f => f.id === editingFixed)?.monto}
+                          onChange={e => setFixedExpenses(prev => prev.map(f => f.id === editingFixed ? { ...f, monto: Number(e.target.value) } : f))}
+                          placeholder="Nuevo monto"
+                        />
+                        <button onClick={() => setEditingFixed(null)} style={{ background: C.accent, border: "none", borderRadius: 9, color: "#fff", fontWeight: 700, padding: "10px 14px", cursor: "pointer", fontSize: 13 }}>OK</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <input style={{ ...inp, marginBottom: 8 }} value={desc} onChange={e => setDesc(e.target.value)}
+                placeholder={tipo === "egreso" ? "Ej: Mercadería, pasajes..." : tipo === "ingreso-yape" ? "Ej: Venta por Yape..." : "Ej: Ventas del día, cuadernos..."}
+                onKeyDown={e => e.key === "Enter" && addItem()} />
               <input style={{ ...inp, marginBottom: 10 }} type="number" value={monto} onChange={e => setMonto(e.target.value)} placeholder="Monto en S/" onKeyDown={e => e.key === "Enter" && addItem()} />
-              <button onClick={addItem} disabled={!desc || !monto || saving} style={{ width: "100%", background: tipo === "ingreso" ? C.success : C.danger, border: "none", borderRadius: 9, color: "#fff", fontSize: 14, fontWeight: 700, padding: "12px", cursor: (!desc || !monto || saving) ? "not-allowed" : "pointer", opacity: (!desc || !monto || saving) ? 0.5 : 1, fontFamily: "'DM Sans',sans-serif" }}>
-                {saving ? "⏳ Guardando..." : `+ Registrar ${tipo === "ingreso" ? "Ingreso" : "Egreso"}`}
+
+              <button onClick={addItem} disabled={!desc || !monto || saving} style={{ width: "100%", background: tipo === "egreso" ? C.danger : tipo === "ingreso-yape" ? C.yape : C.success, border: "none", borderRadius: 9, color: "#fff", fontSize: 14, fontWeight: 700, padding: "12px", cursor: (!desc || !monto || saving) ? "not-allowed" : "pointer", opacity: (!desc || !monto || saving) ? 0.5 : 1, fontFamily: "'DM Sans',sans-serif" }}>
+                {saving ? "⏳ Guardando..." : tipo === "ingreso" ? "+ Registrar Efectivo" : tipo === "ingreso-yape" ? "+ Registrar Yape" : "+ Registrar Egreso"}
               </button>
             </div>
 
+            {/* Items del día */}
             <div style={card}>
               <span style={lbl}>Movimientos del día</span>
               {loadingData ? <div style={{ textAlign: "center", color: C.muted, padding: "16px 0", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}><div style={spinner} /> Cargando...</div>
                 : dayItems.length === 0 ? <div style={{ textAlign: "center", color: C.dim, padding: "16px 0", fontSize: 13, fontStyle: "italic" }}>Sin registros para este día</div>
                   : dayItems.map((item, idx) => (
                     <div key={item.id} style={{ display: "flex", alignItems: "center", padding: "9px 0", borderBottom: idx === dayItems.length - 1 ? "none" : `1px solid ${C.border}` }}>
-                      <div style={{ width: 7, height: 7, borderRadius: "50%", background: item.tipo === "ingreso" ? C.success : C.danger, marginRight: 10, flexShrink: 0 }} />
+                      <div style={{ width: 7, height: 7, borderRadius: "50%", background: itemColor(item.tipo), marginRight: 10, flexShrink: 0 }} />
                       <span style={{ flex: 1, fontSize: 13 }}>{item.descripcion}</span>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: item.tipo === "ingreso" ? C.success : C.danger, marginRight: 8 }}>{fmt(item.monto)}</span>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: itemColor(item.tipo), background: item.tipo === "ingreso" ? C.successLight : item.tipo === "ingreso-yape" ? C.yapeLight : C.dangerLight, padding: "2px 7px", borderRadius: 20, marginRight: 8 }}>{itemLabel(item.tipo)}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: itemColor(item.tipo), marginRight: 8 }}>{fmt(item.monto)}</span>
                       <button onClick={() => removeItem(item.id)} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 17, padding: "0 4px" }}>×</button>
                     </div>
                   ))}
             </div>
 
+            {/* Resumen mes + gráfico */}
             <div style={card}>
               <span style={lbl}>📈 Resumen {mesLabel}</span>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
@@ -339,7 +424,7 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
               : dateGroups.length === 0 ? <div style={{ textAlign: "center", color: C.dim, padding: "20px 0", fontSize: 13, fontStyle: "italic" }}>No hay registros en este mes</div>
                 : dateGroups.map(date => {
                   const items = allItems.filter(r => r.fecha === date);
-                  const ing = items.filter(r => r.tipo === "ingreso").reduce((s, r) => s + Number(r.monto), 0);
+                  const ing = items.filter(r => r.tipo === "ingreso" || r.tipo === "ingreso-yape").reduce((s, r) => s + Number(r.monto), 0);
                   const egr = items.filter(r => r.tipo === "egreso").reduce((s, r) => s + Number(r.monto), 0);
                   const net = ing - egr;
                   const lbl2 = new Date(date + "T12:00:00").toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "short" });
@@ -352,9 +437,10 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
                       <div style={{ padding: "6px 14px" }}>
                         {items.map((item, idx) => (
                           <div key={item.id} style={{ display: "flex", alignItems: "center", padding: "7px 0", borderBottom: idx === items.length - 1 ? "none" : `1px solid ${C.border}` }}>
-                            <div style={{ width: 6, height: 6, borderRadius: "50%", background: item.tipo === "ingreso" ? C.success : C.danger, marginRight: 9, flexShrink: 0 }} />
+                            <div style={{ width: 6, height: 6, borderRadius: "50%", background: itemColor(item.tipo), marginRight: 9, flexShrink: 0 }} />
                             <span style={{ flex: 1, fontSize: 12 }}>{item.descripcion}</span>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: item.tipo === "ingreso" ? C.success : C.danger, marginRight: 8 }}>{fmt(item.monto)}</span>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: itemColor(item.tipo), background: item.tipo === "ingreso" ? C.successLight : item.tipo === "ingreso-yape" ? C.yapeLight : C.dangerLight, padding: "2px 6px", borderRadius: 20, marginRight: 8 }}>{itemLabel(item.tipo)}</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: itemColor(item.tipo), marginRight: 8 }}>{fmt(item.monto)}</span>
                             <button onClick={() => removeItem(item.id)} style={{ background: "none", border: "none", color: C.dim, cursor: "pointer", fontSize: 16, padding: "0 4px" }}>×</button>
                           </div>
                         ))}
