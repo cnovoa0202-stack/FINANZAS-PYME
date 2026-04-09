@@ -28,13 +28,16 @@ const headers = {
 
 async function dbGet(negocio, mes) {
   try {
+    const [year, month] = mes.split("-").map(Number);
+    const lastDay = new Date(year, month, 0).getDate();
+    const lastDate = `${mes}-${String(lastDay).padStart(2, "0")}`;
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/registros?select=*&negocio=eq.${encodeURIComponent(negocio)}&fecha=gte.${mes}-01&fecha=lte.${mes}-31&order=fecha,id`,
+      `${SUPABASE_URL}/rest/v1/registros?select=*&negocio=eq.${encodeURIComponent(negocio)}&fecha=gte.${mes}-01&fecha=lte.${lastDate}&order=id.asc`,
       { headers }
     );
-    if (!res.ok) return [];
+    if (!res.ok) { console.error("dbGet error", res.status, await res.text()); return []; }
     return await res.json();
-  } catch { return []; }
+  } catch(e) { console.error("dbGet exception", e); return []; }
 }
 
 async function dbInsert(row) {
