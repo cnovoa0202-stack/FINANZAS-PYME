@@ -134,6 +134,7 @@ function Icon({ name, size = 18, color = "currentColor", strokeWidth = 2, style 
     case "log-out": return <svg {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>;
     case "menu": return <svg {...p}><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>;
     case "zap": return <svg {...p}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>;
+    case "plus": return <svg {...p}><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>;
     case "trending-up": return <svg {...p}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></svg>;
     case "alert-triangle": return <svg {...p}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>;
     case "check-circle": return <svg {...p}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>;
@@ -330,9 +331,11 @@ export default function App() {
   const [adminData, setAdminData] = useState(null);
   const [loadingAdmin, setLoadingAdmin] = useState(false);
 
-  // Gastos fijos editables (locales, no persistidos)
-  const [fixedExpenses, setFixedExpenses] = useState(DEFAULT_FIXED);
+  const [fixedExpenses, setFixedExpenses] = useState([]);
   const [editingFixed, setEditingFixed] = useState(null);
+  const [addingFixed, setAddingFixed] = useState(false);
+  const [newFixedLabel, setNewFixedLabel] = useState("");
+  const [newFixedMonto, setNewFixedMonto] = useState("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -348,6 +351,23 @@ export default function App() {
     });
     return () => { cancelled = true; };
   }, [session]);
+
+  useEffect(() => {
+    if (previewMode) {
+      setFixedExpenses(DEFAULT_FIXED.map((f, i) => ({ ...f, id: `preview-fx-${i}` })));
+      return;
+    }
+    if (!session) { setFixedExpenses([]); return; }
+    let cancelled = false;
+    supabase.from("gastos_fijos").select("*").eq("user_id", session.user.id).order("id", { ascending: true }).then(async ({ data }) => {
+      if (cancelled) return;
+      if (data && data.length > 0) { setFixedExpenses(data); return; }
+      const seeds = DEFAULT_FIXED.map(f => ({ user_id: session.user.id, label: f.label, monto: f.monto, icon: f.icon }));
+      const { data: inserted } = await supabase.from("gastos_fijos").insert(seeds).select();
+      if (!cancelled) setFixedExpenses(inserted || []);
+    });
+    return () => { cancelled = true; };
+  }, [session, previewMode]);
 
   const currentMonth = selectedDate.slice(0, 7);
   const mesLabel = new Date(currentMonth + "-02").toLocaleString("es-PE", { month: "long", year: "numeric" });
@@ -376,6 +396,7 @@ export default function App() {
   const monthEgresos = allItems.filter(r => r.tipo === "egreso").reduce((s, r) => s + Number(r.monto), 0);
   const monthNet = monthIngresos - monthEgresos;
   const dateGroups = [...new Set(allItems.map(r => r.fecha))].sort((a, b) => b.localeCompare(a));
+  const pendingFixed = fixedExpenses.filter(fx => !allItems.some(r => r.tipo === "egreso" && r.descripcion === fx.label));
 
   async function addItem() {
     if (!desc.trim() || !monto || saving) return;
@@ -408,6 +429,27 @@ export default function App() {
     setSaving(false);
   }
 
+  async function addCustomFixed() {
+    if (!newFixedLabel.trim() || !newFixedMonto) return;
+    if (previewMode) {
+      setFixedExpenses(prev => [...prev, { id: `preview-fx-${Date.now()}`, label: newFixedLabel.trim(), monto: Number(newFixedMonto), icon: "zap" }]);
+    } else if (session) {
+      const { data } = await supabase.from("gastos_fijos").insert({ user_id: session.user.id, label: newFixedLabel.trim(), monto: Number(newFixedMonto), icon: "zap" }).select().single();
+      if (data) setFixedExpenses(prev => [...prev, data]);
+    }
+    setNewFixedLabel(""); setNewFixedMonto(""); setAddingFixed(false);
+  }
+
+  async function removeFixedExpense(id) {
+    if (!previewMode) await supabase.from("gastos_fijos").delete().eq("id", id);
+    setFixedExpenses(prev => prev.filter(f => f.id !== id));
+    if (editingFixed === id) setEditingFixed(null);
+  }
+
+  async function commitFixedMonto(fx) {
+    if (!previewMode) await supabase.from("gastos_fijos").update({ monto: fx.monto }).eq("id", fx.id);
+  }
+
   async function removeItem(id) {
     if (!previewMode) await dbDelete(id);
     setAllItems(prev => prev.filter(i => i.id !== id));
@@ -420,6 +462,8 @@ export default function App() {
     setView("daily");
     setAllItems([]);
     setAdminData(null);
+    setEditingFixed(null);
+    setAddingFixed(false);
   }
 
   async function commitPerfilEdits() {
@@ -555,6 +599,22 @@ export default function App() {
         {/* DAILY */}
         {view === "daily" && (
           <div className="fade">
+            {pendingFixed.length > 0 && (
+              <div style={{ ...card, background: C.accentLight, border: `1px solid ${C.accentBorder}` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
+                  <Icon name="alert-triangle" size={14} color={C.accent} />
+                  <span style={{ fontSize: 11, fontWeight: 700, color: C.accent, letterSpacing: "1px", textTransform: "uppercase" }}>Gastos fijos pendientes · {mesLabel}</span>
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {pendingFixed.map(fx => (
+                    <button key={fx.id} className="quick-btn" disabled={saving} onClick={() => addFixedExpense(fx)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", background: C.white, border: `1px solid ${C.accentBorder}`, borderRadius: 9, color: C.text, fontWeight: 600, fontSize: 12, cursor: saving ? "not-allowed" : "pointer", fontFamily: "'DM Sans',sans-serif" }}>
+                      <Icon name={fx.icon} size={13} color={C.accent} /> {fx.label} <span style={{ fontWeight: 800 }}>{fmt(fx.monto)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div style={card}>
               <span style={lbl}>Fecha de registro</span>
               <input style={inp} type="date" value={selectedDate} max={todayStr()} onChange={e => setSelectedDate(e.target.value)} />
@@ -599,8 +659,16 @@ export default function App() {
                           onClick={() => setEditingFixed(fx.id === editingFixed ? null : fx.id)}
                           style={{ padding: "8px 8px", background: "transparent", border: "none", borderLeft: `1px solid ${C.dangerBorder}`, color: C.muted, cursor: "pointer", display: "flex" }}
                         ><Icon name="pencil" size={12} /></button>
+                        <button
+                          onClick={() => removeFixedExpense(fx.id)}
+                          style={{ padding: "8px 9px", background: "transparent", border: "none", borderLeft: `1px solid ${C.dangerBorder}`, color: C.muted, cursor: "pointer", fontSize: 15, lineHeight: 1 }}
+                        >×</button>
                       </div>
                     ))}
+                    <button
+                      onClick={() => setAddingFixed(v => !v)}
+                      style={{ display: "flex", alignItems: "center", gap: 5, padding: "8px 12px", background: "transparent", border: `1px dashed ${C.border}`, borderRadius: 9, color: C.muted, fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}
+                    ><Icon name="plus" size={13} /> Agregar</button>
                   </div>
 
                   {editingFixed && (
@@ -616,7 +684,21 @@ export default function App() {
                           onChange={e => setFixedExpenses(prev => prev.map(f => f.id === editingFixed ? { ...f, monto: Number(e.target.value) } : f))}
                           placeholder="Nuevo monto"
                         />
-                        <button onClick={() => setEditingFixed(null)} style={{ background: C.accent, border: "none", borderRadius: 9, color: "#fff", fontWeight: 700, padding: "10px 14px", cursor: "pointer", fontSize: 13 }}>OK</button>
+                        <button onClick={() => { commitFixedMonto(fixedExpenses.find(f => f.id === editingFixed)); setEditingFixed(null); }} style={{ background: C.accent, border: "none", borderRadius: 9, color: "#fff", fontWeight: 700, padding: "10px 14px", cursor: "pointer", fontSize: 13 }}>OK</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {addingFixed && (
+                    <div style={{ marginTop: 10, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, padding: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 8 }}>Nuevo gasto fijo</div>
+                      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                        <input style={{ ...inp, flex: 2 }} value={newFixedLabel} onChange={e => setNewFixedLabel(e.target.value)} placeholder="Ej: Luz, agua..." />
+                        <input style={{ ...inp, flex: 1 }} type="number" value={newFixedMonto} onChange={e => setNewFixedMonto(e.target.value)} placeholder="Monto" />
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button onClick={addCustomFixed} disabled={!newFixedLabel.trim() || !newFixedMonto} style={{ background: C.accent, border: "none", borderRadius: 9, color: "#fff", fontWeight: 700, padding: "10px 14px", cursor: "pointer", fontSize: 13, opacity: (!newFixedLabel.trim() || !newFixedMonto) ? 0.5 : 1 }}>Guardar</button>
+                        <button onClick={() => { setAddingFixed(false); setNewFixedLabel(""); setNewFixedMonto(""); }} style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 9, color: C.muted, fontWeight: 600, padding: "10px 14px", cursor: "pointer", fontSize: 13 }}>Cancelar</button>
                       </div>
                     </div>
                   )}
