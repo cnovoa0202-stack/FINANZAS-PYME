@@ -22,8 +22,10 @@ const card = { background: C.white, border: `1px solid ${C.border}`, borderRadiu
 const lbl = { fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 8, display: "block" };
 const spinner = { width: 15, height: 15, border: `2px solid ${C.border}`, borderTop: `2px solid ${C.accent}`, borderRadius: "50%", animation: "spin 0.8s linear infinite" };
 
+const wordmark = { fontFamily: "'Space Grotesk', 'DM Sans', sans-serif", fontWeight: 800 };
+
 const GLOBAL_STYLE = `
-  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@700;800&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
   input, select { color-scheme: dark; }
   input:focus, select:focus { border-color: ${C.accent} !important; outline: none; box-shadow: 0 0 0 3px rgba(228,0,43,0.25); }
@@ -118,10 +120,34 @@ function itemLabel(tipo) {
   return "Egreso";
 }
 
+function Icon({ name, size = 18, color = "currentColor", strokeWidth = 2, style }) {
+  const p = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth, strokeLinecap: "round", strokeLinejoin: "round", style };
+  switch (name) {
+    case "cash": return <svg {...p}><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="3" /></svg>;
+    case "phone": return <svg {...p}><rect x="6" y="2" width="12" height="20" rx="2" /><line x1="11" y1="18" x2="13" y2="18" /></svg>;
+    case "arrow-down-circle": return <svg {...p}><circle cx="12" cy="12" r="10" /><path d="M12 8v8M8 12l4 4 4-4" /></svg>;
+    case "edit": return <svg {...p}><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>;
+    case "pencil": return <svg {...p}><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>;
+    case "calendar": return <svg {...p}><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>;
+    case "bar-chart": return <svg {...p}><path d="M3 3v18h18" /><rect x="7" y="12" width="3" height="6" /><rect x="12" y="8" width="3" height="10" /><rect x="17" y="5" width="3" height="13" /></svg>;
+    case "settings": return <svg {...p}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" /></svg>;
+    case "log-out": return <svg {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>;
+    case "menu": return <svg {...p}><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>;
+    case "zap": return <svg {...p}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>;
+    case "trending-up": return <svg {...p}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></svg>;
+    case "alert-triangle": return <svg {...p}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>;
+    case "check-circle": return <svg {...p}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>;
+    case "eye": return <svg {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" /><circle cx="12" cy="12" r="3" /></svg>;
+    case "home": return <svg {...p}><path d="M3 9l9-7 9 7" /><path d="M9 22V12h6v10" /></svg>;
+    case "wifi": return <svg {...p}><path d="M5 13a10 10 0 0 1 14 0" /><path d="M8.5 16.5a5 5 0 0 1 7 0" /><line x1="12" y1="20" x2="12.01" y2="20" /></svg>;
+    default: return null;
+  }
+}
+
 // Gastos fijos por defecto
 const DEFAULT_FIXED = [
-  { id: "alquiler", label: "Alquiler", monto: 500, icon: "🏠" },
-  { id: "internet", label: "Internet", monto: 20, icon: "📶" },
+  { id: "alquiler", label: "Alquiler", monto: 500, icon: "home" },
+  { id: "internet", label: "Internet", monto: 20, icon: "wifi" },
 ];
 
 function AuthScreen({ onPreview }) {
@@ -203,7 +229,7 @@ function AuthScreen({ onPreview }) {
       <style>{GLOBAL_STYLE}</style>
       <div style={{ width: "100%", maxWidth: 360 }}>
         <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <div style={{ fontSize: 34, fontWeight: 900, color: C.brand, letterSpacing: "1px", textTransform: "uppercase", fontFamily: "'DM Sans',sans-serif" }}>TUCHAMBA</div>
+          <div style={{ ...wordmark, fontSize: 34, color: C.brand, letterSpacing: "0.5px" }}>TUCHAMBA</div>
           <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Control diario de ingresos y egresos</div>
         </div>
 
@@ -247,16 +273,16 @@ function AuthScreen({ onPreview }) {
             </>
           )}
 
-          {error && <div style={{ background: C.dangerLight, border: `1px solid ${C.dangerBorder}`, borderRadius: 9, padding: "9px 12px", fontSize: 12, color: C.danger, marginTop: 4, marginBottom: 4 }}>⚠️ {error}</div>}
+          {error && <div style={{ background: C.dangerLight, border: `1px solid ${C.dangerBorder}`, borderRadius: 9, padding: "9px 12px", fontSize: 12, color: C.danger, marginTop: 4, marginBottom: 4, display: "flex", alignItems: "center", gap: 7 }}><Icon name="alert-triangle" size={14} /> {error}</div>}
 
           <button onClick={submit} disabled={loading} style={{ width: "100%", background: C.accent, border: "none", borderRadius: 9, color: "#fff", fontSize: 14, fontWeight: 700, padding: "12px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1, marginTop: 14, fontFamily: "'DM Sans',sans-serif" }}>
-            {loading ? "⏳ Un momento..." : mode === "login" ? "Entrar" : "Crear cuenta"}
+            {loading ? "Un momento..." : mode === "login" ? "Entrar" : "Crear cuenta"}
           </button>
         </div>
 
         {import.meta.env.DEV && (
-          <button onClick={onPreview} style={{ width: "100%", background: "transparent", border: "none", color: C.muted, fontSize: 12, padding: "14px 0 0", cursor: "pointer", textAlign: "center", textDecoration: "underline", fontFamily: "'DM Sans',sans-serif" }}>
-            👁️ Ver vista previa con datos de ejemplo (sin conexión)
+          <button onClick={onPreview} style={{ width: "100%", background: "transparent", border: "none", color: C.muted, fontSize: 12, padding: "14px 0 0", cursor: "pointer", textAlign: "center", fontFamily: "'DM Sans',sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            <Icon name="eye" size={13} /> <span style={{ textDecoration: "underline" }}>Ver vista previa con datos de ejemplo (sin conexión)</span>
           </button>
         )}
       </div>
@@ -477,8 +503,8 @@ export default function App() {
       <style>{GLOBAL_STYLE}</style>
 
       {previewMode && (
-        <div style={{ background: C.brand, color: "#fff", textAlign: "center", fontSize: 12, fontWeight: 700, padding: "6px 12px" }}>
-          👁️ VISTA PREVIA — datos de ejemplo, nada se guarda de verdad
+        <div style={{ background: C.brand, color: "#fff", textAlign: "center", fontSize: 12, fontWeight: 700, padding: "6px 12px", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+          <Icon name="eye" size={13} /> VISTA PREVIA — datos de ejemplo, nada se guarda de verdad
         </div>
       )}
 
@@ -512,19 +538,19 @@ export default function App() {
             <option value="RMT">RMT</option><option value="General">General</option>
             <option value="Informal">Informal</option>
           </select>
-          <button onClick={() => setDrawerOpen(true)} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, color: C.muted, cursor: "pointer", fontSize: 18, padding: "8px 10px" }}>☰</button>
+          <button onClick={() => setDrawerOpen(true)} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, color: C.muted, cursor: "pointer", padding: "9px 10px", display: "flex" }}><Icon name="menu" size={17} /></button>
         </div>
         <div style={{ maxWidth: 480, margin: "0 auto", display: "flex", borderTop: `1px solid ${C.border}` }}>
-          {[["daily", "📝", "Diario"], ["history", "📅", "Historial"]].map(([v, icon, label]) => (
+          {[["daily", "edit", "Diario"], ["history", "calendar", "Historial"]].map(([v, icon, label]) => (
             <button key={v} onClick={() => setView(v)} style={{ flex: 1, padding: "12px 8px", border: "none", background: "transparent", borderBottom: view === v ? `2px solid ${C.accent}` : "2px solid transparent", color: view === v ? C.accent : C.muted, fontWeight: view === v ? 700 : 500, fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-              {icon} {label}
+              <Icon name={icon} size={15} /> {label}
             </button>
           ))}
         </div>
       </div>
 
       <div style={{ maxWidth: 480, margin: "0 auto", padding: "16px 16px 80px" }}>
-        {error && <div style={{ background: C.dangerLight, border: `1px solid ${C.dangerBorder}`, borderRadius: 10, padding: "10px 14px", fontSize: 13, color: C.danger, marginBottom: 12 }}>⚠️ {error}</div>}
+        {error && <div style={{ background: C.dangerLight, border: `1px solid ${C.dangerBorder}`, borderRadius: 10, padding: "10px 14px", fontSize: 13, color: C.danger, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Icon name="alert-triangle" size={15} /> {error}</div>}
 
         {/* DAILY */}
         {view === "daily" && (
@@ -545,20 +571,20 @@ export default function App() {
               <span style={{ ...lbl, marginBottom: 10 }}>Nuevo movimiento</span>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
-                <button onClick={() => setTipo("ingreso")} style={{ padding: "10px 6px", border: `1px solid ${tipo === "ingreso" ? C.successBorder : C.border}`, borderRadius: 9, background: tipo === "ingreso" ? C.successLight : C.white, color: tipo === "ingreso" ? C.success : C.muted, fontWeight: tipo === "ingreso" ? 700 : 500, fontSize: 12, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
-                  💵 Efectivo
+                <button onClick={() => setTipo("ingreso")} style={{ padding: "10px 6px", border: `1px solid ${tipo === "ingreso" ? C.successBorder : C.border}`, borderRadius: 9, background: tipo === "ingreso" ? C.successLight : C.white, color: tipo === "ingreso" ? C.success : C.muted, fontWeight: tipo === "ingreso" ? 700 : 500, fontSize: 12, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+                  <Icon name="cash" size={14} /> Efectivo
                 </button>
-                <button onClick={() => setTipo("ingreso-yape")} style={{ padding: "10px 6px", border: `1px solid ${tipo === "ingreso-yape" ? C.yapeBorder : C.border}`, borderRadius: 9, background: tipo === "ingreso-yape" ? C.yapeLight : C.white, color: tipo === "ingreso-yape" ? C.yape : C.muted, fontWeight: tipo === "ingreso-yape" ? 700 : 500, fontSize: 12, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
-                  📱 Yape
+                <button onClick={() => setTipo("ingreso-yape")} style={{ padding: "10px 6px", border: `1px solid ${tipo === "ingreso-yape" ? C.yapeBorder : C.border}`, borderRadius: 9, background: tipo === "ingreso-yape" ? C.yapeLight : C.white, color: tipo === "ingreso-yape" ? C.yape : C.muted, fontWeight: tipo === "ingreso-yape" ? 700 : 500, fontSize: 12, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+                  <Icon name="phone" size={14} /> Yape
                 </button>
-                <button onClick={() => setTipo("egreso")} style={{ padding: "10px 6px", border: `1px solid ${tipo === "egreso" ? C.dangerBorder : C.border}`, borderRadius: 9, background: tipo === "egreso" ? C.dangerLight : C.white, color: tipo === "egreso" ? C.danger : C.muted, fontWeight: tipo === "egreso" ? 700 : 500, fontSize: 12, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
-                  ❌ Egreso
+                <button onClick={() => setTipo("egreso")} style={{ padding: "10px 6px", border: `1px solid ${tipo === "egreso" ? C.dangerBorder : C.border}`, borderRadius: 9, background: tipo === "egreso" ? C.dangerLight : C.white, color: tipo === "egreso" ? C.danger : C.muted, fontWeight: tipo === "egreso" ? 700 : 500, fontSize: 12, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+                  <Icon name="arrow-down-circle" size={14} /> Egreso
                 </button>
               </div>
 
               {tipo === "egreso" && (
                 <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 8 }}>⚡ Gastos fijos</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}><Icon name="zap" size={12} /> Gastos fijos</div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {fixedExpenses.map(fx => (
                       <div key={fx.id} style={{ display: "flex", alignItems: "center", gap: 0, background: C.dangerLight, border: `1px solid ${C.dangerBorder}`, borderRadius: 9, overflow: "hidden" }}>
@@ -567,12 +593,12 @@ export default function App() {
                           onClick={() => { setDesc(fx.label); setMonto(String(fx.monto)); }}
                           style={{ padding: "8px 12px", background: "transparent", border: "none", color: C.danger, fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", display: "flex", alignItems: "center", gap: 5 }}
                         >
-                          {fx.icon} {fx.label} <span style={{ fontWeight: 800 }}>{fmt(fx.monto)}</span>
+                          <Icon name={fx.icon} size={13} /> {fx.label} <span style={{ fontWeight: 800 }}>{fmt(fx.monto)}</span>
                         </button>
                         <button
                           onClick={() => setEditingFixed(fx.id === editingFixed ? null : fx.id)}
-                          style={{ padding: "8px 8px", background: "transparent", border: "none", borderLeft: `1px solid ${C.dangerBorder}`, color: C.muted, cursor: "pointer", fontSize: 12 }}
-                        >✏️</button>
+                          style={{ padding: "8px 8px", background: "transparent", border: "none", borderLeft: `1px solid ${C.dangerBorder}`, color: C.muted, cursor: "pointer", display: "flex" }}
+                        ><Icon name="pencil" size={12} /></button>
                       </div>
                     ))}
                   </div>
@@ -603,7 +629,7 @@ export default function App() {
               <input style={{ ...inp, marginBottom: 10 }} type="number" value={monto} onChange={e => setMonto(e.target.value)} placeholder="Monto en S/" onKeyDown={e => e.key === "Enter" && addItem()} />
 
               <button onClick={addItem} disabled={!desc || !monto || saving} style={{ width: "100%", background: tipo === "egreso" ? C.danger : tipo === "ingreso-yape" ? C.yape : C.success, border: "none", borderRadius: 9, color: "#fff", fontSize: 14, fontWeight: 700, padding: "12px", cursor: (!desc || !monto || saving) ? "not-allowed" : "pointer", opacity: (!desc || !monto || saving) ? 0.5 : 1, fontFamily: "'DM Sans',sans-serif" }}>
-                {saving ? "⏳ Guardando..." : tipo === "ingreso" ? "+ Registrar Efectivo" : tipo === "ingreso-yape" ? "+ Registrar Yape" : "+ Registrar Egreso"}
+                {saving ? "Guardando..." : tipo === "ingreso" ? "+ Registrar Efectivo" : tipo === "ingreso-yape" ? "+ Registrar Yape" : "+ Registrar Egreso"}
               </button>
             </div>
 
@@ -623,7 +649,7 @@ export default function App() {
             </div>
 
             <div style={card}>
-              <span style={lbl}>📈 Resumen {mesLabel}</span>
+              <span style={{ ...lbl, display: "flex", alignItems: "center", gap: 6 }}><Icon name="trending-up" size={12} /> Resumen {mesLabel}</span>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
                 <div style={{ textAlign: "center" }}><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase" }}>Ingresos</div><div style={{ fontSize: 16, fontWeight: 800, color: C.success }}>{fmt(monthIngresos)}</div></div>
                 <div style={{ textAlign: "center" }}><div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase" }}>Egresos</div><div style={{ fontSize: 16, fontWeight: 800, color: C.danger }}>{fmt(monthEgresos)}</div></div>
@@ -690,8 +716,9 @@ export default function App() {
                 <span style={{ color: C.muted }}>Ingresos: <b style={{ color: C.success }}>{fmt(monthIngresos)}</b></span>
                 <span style={{ color: C.muted }}>Egresos: <b style={{ color: C.danger }}>{fmt(monthEgresos)}</b></span>
               </div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: monthNet >= 0 ? C.success : C.danger }}>
-                {monthNet >= 0 ? "✅ Ganancia: " : "❌ Pérdida: "}{fmt(Math.abs(monthNet))}
+              <div style={{ fontSize: 18, fontWeight: 800, color: monthNet >= 0 ? C.success : C.danger, display: "flex", alignItems: "center", gap: 7 }}>
+                <Icon name={monthNet >= 0 ? "check-circle" : "alert-triangle"} size={16} />
+                {monthNet >= 0 ? "Ganancia: " : "Pérdida: "}{fmt(Math.abs(monthNet))}
               </div>
             </div>
             {allItems.length === 0 ? (
@@ -746,27 +773,27 @@ export default function App() {
               )}
               <div>
                 <div style={{ fontSize: 18, fontWeight: 800 }}>{perfil.negocio}</div>
-                <div style={{ fontSize: 11, fontWeight: 900, color: C.brand, letterSpacing: "0.5px", textTransform: "uppercase", marginTop: 2 }}>TUCHAMBA</div>
+                <div style={{ ...wordmark, fontSize: 11, color: C.brand, letterSpacing: "0.5px", textTransform: "uppercase", marginTop: 2 }}>TUCHAMBA</div>
               </div>
             </div>
-            {[["daily", "📝", "Registro Diario", "Ingresos y egresos del día"], ["history", "📅", "Historial", "Movimientos por mes"]].map(([v, icon, label, sub]) => (
+            {[["daily", "edit", "Registro Diario", "Ingresos y egresos del día"], ["history", "calendar", "Historial", "Movimientos por mes"]].map(([v, icon, label, sub]) => (
               <div key={v} onClick={() => { setView(v); setDrawerOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", cursor: "pointer", background: view === v ? C.accentLight : "transparent", borderLeft: view === v ? `3px solid ${C.accent}` : "3px solid transparent" }}>
-                <span style={{ fontSize: 18 }}>{icon}</span>
+                <Icon name={icon} size={17} color={view === v ? C.accent : C.muted} />
                 <div><div style={{ fontSize: 14, fontWeight: 600 }}>{label}</div><div style={{ fontSize: 11, color: C.muted }}>{sub}</div></div>
               </div>
             ))}
             <div onClick={() => { setView("report"); setDrawerOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", cursor: "pointer", background: view === "report" ? C.accentLight : "transparent", borderLeft: view === "report" ? `3px solid ${C.accent}` : "3px solid transparent" }}>
-              <span style={{ fontSize: 18 }}>📊</span>
+              <Icon name="bar-chart" size={17} color={view === "report" ? C.accent : C.muted} />
               <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 600 }}>Resumen Mensual</div><div style={{ fontSize: 11, color: C.muted }}>Ingresos y egresos del mes</div></div>
             </div>
             {perfil?.rol === "admin" && (
               <div onClick={() => { setView("admin"); setDrawerOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", cursor: "pointer", background: view === "admin" ? C.accentLight : "transparent", borderLeft: view === "admin" ? `3px solid ${C.accent}` : "3px solid transparent" }}>
-                <span style={{ fontSize: 18 }}>🛠️</span>
+                <Icon name="settings" size={17} color={view === "admin" ? C.accent : C.muted} />
                 <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 600 }}>Panel Admin</div><div style={{ fontSize: 11, color: C.muted }}>Todos los negocios</div></div>
               </div>
             )}
             <div onClick={handleLogout} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", cursor: "pointer", marginTop: "auto", borderTop: `1px solid ${C.border}`, color: C.danger }}>
-              <span style={{ fontSize: 18 }}>🚪</span>
+              <Icon name="log-out" size={17} />
               <div style={{ fontSize: 14, fontWeight: 600 }}>Cerrar sesión</div>
             </div>
           </div>
