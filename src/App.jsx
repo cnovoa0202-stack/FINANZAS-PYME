@@ -132,8 +132,16 @@ function AuthScreen({ onPreview }) {
   const [dueno, setDueno] = useState("");
   const [regimen, setRegimen] = useState("NRUS");
   const [emailContacto, setEmailContacto] = useState("");
+  const [logoFile, setLogoFile] = useState(null);
+  const [logoPreview, setLogoPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  function handleLogoChange(e) {
+    const file = e.target.files?.[0] || null;
+    setLogoFile(file);
+    setLogoPreview(file ? URL.createObjectURL(file) : null);
+  }
 
   async function submit() {
     setError("");
@@ -172,7 +180,19 @@ function AuthScreen({ onPreview }) {
           regimen,
           email_contacto: emailContacto.trim() || null,
         });
-        if (perfilErr) setError("Tu cuenta se creó, pero no se pudo guardar el perfil. Contáctanos.");
+        if (perfilErr) {
+          setError("Tu cuenta se creó, pero no se pudo guardar el perfil. Contáctanos.");
+        } else if (logoFile) {
+          const ext = logoFile.name.split(".").pop() || "png";
+          const path = `${data.user.id}/logo.${ext}`;
+          const { error: uploadErr } = await supabase.storage
+            .from("logos")
+            .upload(path, logoFile, { upsert: true });
+          if (!uploadErr) {
+            const { data: pub } = supabase.storage.from("logos").getPublicUrl(path);
+            await supabase.from("perfiles").update({ logo_url: pub.publicUrl }).eq("id", data.user.id);
+          }
+        }
       }
     }
     setLoading(false);
@@ -183,7 +203,7 @@ function AuthScreen({ onPreview }) {
       <style>{GLOBAL_STYLE}</style>
       <div style={{ width: "100%", maxWidth: 360 }}>
         <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <div style={{ fontSize: 34, fontWeight: 900, color: C.brand, letterSpacing: "1px", textTransform: "uppercase", fontFamily: "'DM Sans',sans-serif" }}>Chamba</div>
+          <div style={{ fontSize: 34, fontWeight: 900, color: C.brand, letterSpacing: "1px", textTransform: "uppercase", fontFamily: "'DM Sans',sans-serif" }}>TUCHAMBA</div>
           <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Control diario de ingresos y egresos</div>
         </div>
 
@@ -216,6 +236,14 @@ function AuthScreen({ onPreview }) {
 
               <span style={lbl}>Email de contacto (opcional)</span>
               <input style={{ ...inp, marginBottom: 12 }} type="email" value={emailContacto} onChange={e => setEmailContacto(e.target.value)} placeholder="Para soporte, no para iniciar sesión" />
+
+              <span style={lbl}>Logo del negocio (opcional)</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                {logoPreview && (
+                  <img src={logoPreview} alt="Logo" style={{ width: 42, height: 42, borderRadius: 10, objectFit: "cover", border: `1px solid ${C.border}` }} />
+                )}
+                <input style={{ ...inp, fontSize: 12, padding: "8px 10px" }} type="file" accept="image/*" onChange={handleLogoChange} />
+              </div>
             </>
           )}
 
@@ -388,6 +416,24 @@ export default function App() {
     setEditingInfo(false);
   }
 
+  async function updateLogo(file) {
+    if (!file) return;
+    if (previewMode) {
+      setPerfil(prev => (prev ? { ...prev, logo_url: URL.createObjectURL(file) } : prev));
+      return;
+    }
+    if (!session) return;
+    setError("");
+    const ext = file.name.split(".").pop() || "png";
+    const path = `${session.user.id}/logo.${ext}`;
+    const { error: uploadErr } = await supabase.storage.from("logos").upload(path, file, { upsert: true });
+    if (uploadErr) { setError("No se pudo subir el logo."); return; }
+    const { data: pub } = supabase.storage.from("logos").getPublicUrl(path);
+    const logoUrl = `${pub.publicUrl}?t=${Date.now()}`;
+    await supabase.from("perfiles").update({ logo_url: logoUrl }).eq("id", session.user.id);
+    setPerfil(prev => (prev ? { ...prev, logo_url: logoUrl } : prev));
+  }
+
   async function handleRegimenChange(value) {
     setPerfil(prev => (prev ? { ...prev, regimen: value } : prev));
     if (session && !previewMode) await supabase.from("perfiles").update({ regimen: value }).eq("id", session.user.id);
@@ -468,7 +514,14 @@ export default function App() {
       {/* HEADER */}
       <div style={{ background: C.white, borderBottom: `1px solid ${C.border}`, padding: "0 16px", position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ maxWidth: 480, margin: "0 auto", padding: "16px 0", display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 42, height: 42, background: "#ffffff", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 900, color: C.brand, flexShrink: 0 }}>C</div>
+          <label title="Cambiar logo" style={{ cursor: "pointer", flexShrink: 0, position: "relative" }}>
+            <input type="file" accept="image/*" onChange={e => updateLogo(e.target.files?.[0])} style={{ display: "none" }} />
+            {perfil.logo_url ? (
+              <img src={perfil.logo_url} alt="Logo" style={{ width: 42, height: 42, borderRadius: 12, objectFit: "cover", border: `1px solid ${C.border}` }} />
+            ) : (
+              <div style={{ width: 42, height: 42, background: "#ffffff", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 900, color: C.brand }}>T</div>
+            )}
+          </label>
           <div style={{ flex: 1 }}>
             {editingInfo ? (
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -688,9 +741,14 @@ export default function App() {
       {drawerOpen && (
         <div style={{ position: "fixed", inset: 0, background: C.overlay, zIndex: 100, display: "flex", justifyContent: "flex-end" }} onClick={() => setDrawerOpen(false)}>
           <div className="slide" style={{ width: 260, background: C.white, borderLeft: `1px solid ${C.border}`, height: "100%", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
-            <div style={{ padding: "24px 20px 16px", borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ fontSize: 18, fontWeight: 800 }}>{perfil.negocio}</div>
-              <div style={{ fontSize: 11, fontWeight: 900, color: C.brand, letterSpacing: "0.5px", textTransform: "uppercase", marginTop: 2 }}>Chamba</div>
+            <div style={{ padding: "24px 20px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 10 }}>
+              {perfil.logo_url && (
+                <img src={perfil.logo_url} alt="Logo" style={{ width: 36, height: 36, borderRadius: 9, objectFit: "cover", border: `1px solid ${C.border}` }} />
+              )}
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 800 }}>{perfil.negocio}</div>
+                <div style={{ fontSize: 11, fontWeight: 900, color: C.brand, letterSpacing: "0.5px", textTransform: "uppercase", marginTop: 2 }}>TUCHAMBA</div>
+              </div>
             </div>
             {[["daily", "📝", "Registro Diario", "Ingresos y egresos del día"], ["history", "📅", "Historial", "Movimientos por mes"]].map(([v, icon, label, sub]) => (
               <div key={v} onClick={() => { setView(v); setDrawerOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", cursor: "pointer", background: view === v ? C.accentLight : "transparent", borderLeft: view === v ? `3px solid ${C.accent}` : "3px solid transparent" }}>
