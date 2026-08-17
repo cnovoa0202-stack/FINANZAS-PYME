@@ -12,6 +12,12 @@ const C = {
 };
 
 const fmt = (n) => `S/ ${Number(n || 0).toLocaleString("es-PE", { minimumFractionDigits: 2 })}`;
+const getGreeting = () => {
+  const h = new Date().getHours();
+  if (h < 12) return "Buenos días";
+  if (h < 19) return "Buenas tardes";
+  return "Buenas noches";
+};
 const todayStr = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -599,6 +605,9 @@ export default function App() {
         {/* DAILY */}
         {view === "daily" && (
           <div className="fade">
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 14 }}>
+              {getGreeting()}{perfil.dueno ? `, ${perfil.dueno.split(" ")[0]}` : ""} — así va tu negocio hoy.
+            </div>
             {pendingFixed.length > 0 && (
               <div style={{ ...card, background: C.accentLight, border: `1px solid ${C.accentBorder}` }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
