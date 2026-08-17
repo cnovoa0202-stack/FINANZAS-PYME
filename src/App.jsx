@@ -285,19 +285,6 @@ function buildPreviewItems() {
   ];
 }
 
-const PREVIEW_INFORME = `Este mes te fue bien: vendiste más de lo que gastaste, y con margen. 👍
-
-La mayor parte de tu plata entró por ventas en efectivo, pero también tuviste un buen empujón por Yape — casi 3 de cada 10 soles que ganaste vinieron de ahí. Tus gastos fueron pocos y controlados: el alquiler fue lo más fuerte, el resto (mercadería, internet) fue chico.
-
-Algo que noté: tus ventas por Yape no son un detalle menor — ya son una parte real de tu negocio, no algo ocasional.
-
-Para el próximo mes:
-1. Anota tus gastos fijos (como el alquiler) apenas los pagues, no los dejes para último momento.
-2. Compará este mes con el anterior — así ves si estás creciendo o solo yendo parejo.
-3. Como buena parte de tu plata entra por Yape, ten en cuenta que SUNAT sí puede ver esos movimientos. Si el monto sigue subiendo, no está de más hablar con un contador para ver si te conviene formalizarte más o ajustar algo — mejor prevenir que tener un susto después.
-
-(Esto es una guía simple para orientarte, no un informe contable ni una asesoría legal formal. Este además es un ejemplo — con tus datos reales, el consejo va a ser específico a tu negocio.)`;
-
 export default function App() {
   const [session, setSession] = useState(undefined); // undefined = cargando sesión
   const [perfil, setPerfil] = useState(undefined); // undefined = cargando perfil
@@ -312,10 +299,10 @@ export default function App() {
   const [monto, setMonto] = useState("");
   const [tipo, setTipo] = useState("ingreso");
   const [saving, setSaving] = useState(false);
-  const [informe, setInforme] = useState("");
-  const [loadingIA, setLoadingIA] = useState(false);
   const [error, setError] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [adminData, setAdminData] = useState(null);
+  const [loadingAdmin, setLoadingAdmin] = useState(false);
 
   // Gastos fijos editables (locales, no persistidos)
   const [fixedExpenses, setFixedExpenses] = useState(DEFAULT_FIXED);
@@ -406,7 +393,7 @@ export default function App() {
     setDrawerOpen(false);
     setView("daily");
     setAllItems([]);
-    setInforme("");
+    setAdminData(null);
   }
 
   async function commitPerfilEdits() {
@@ -439,49 +426,33 @@ export default function App() {
     if (session && !previewMode) await supabase.from("perfiles").update({ regimen: value }).eq("id", session.user.id);
   }
 
-  async function generarInforme() {
-    if (allItems.length === 0 || loadingIA) return;
-    if (previewMode) {
-      setLoadingIA(true); setInforme(""); setError("");
-      setTimeout(() => { setInforme(PREVIEW_INFORME); setLoadingIA(false); }, 600);
-      return;
-    }
-    if (!session) return;
-    setLoadingIA(true); setInforme(""); setError("");
-    const sortedDates = [...new Set(allItems.map(r => r.fecha))].sort((a, b) => b.localeCompare(a));
-    const desglose = sortedDates.map(d => {
-      const items = allItems.filter(r => r.fecha === d);
+  const tipoTotales = {
+    efectivo: allItems.filter(r => r.tipo === "ingreso").reduce((s, r) => s + Number(r.monto), 0),
+    yape: allItems.filter(r => r.tipo === "ingreso-yape").reduce((s, r) => s + Number(r.monto), 0),
+    egresos: monthEgresos,
+  };
+
+  async function loadAdminData() {
+    if (!session || previewMode) return;
+    setLoadingAdmin(true);
+    const [year, month] = currentMonth.split("-").map(Number);
+    const lastDay = new Date(year, month, 0).getDate();
+    const lastDate = `${currentMonth}-${String(lastDay).padStart(2, "0")}`;
+    const [{ data: perfiles }, { data: registros }] = await Promise.all([
+      supabase.from("perfiles").select("id, negocio, dueno, regimen"),
+      supabase.from("registros").select("*").gte("fecha", `${currentMonth}-01`).lte("fecha", lastDate),
+    ]);
+    const porNegocio = (perfiles || []).map(p => {
+      const items = (registros || []).filter(r => r.user_id === p.id);
       const ing = items.filter(r => r.tipo === "ingreso" || r.tipo === "ingreso-yape").reduce((s, r) => s + Number(r.monto), 0);
       const egr = items.filter(r => r.tipo === "egreso").reduce((s, r) => s + Number(r.monto), 0);
-      const dlbl = new Date(d + "T12:00:00").toLocaleDateString("es-PE", { weekday: "short", day: "numeric", month: "short" });
-      return `${dlbl}: Ingresos S/${ing.toFixed(2)}, Egresos S/${egr.toFixed(2)}, Neto S/${(ing - egr).toFixed(2)}`;
-    }).join("\n");
-    const detalle = allItems.map(i => {
-      const tipoLabel = i.tipo === "ingreso-yape" ? "INGRESO YAPE" : i.tipo.toUpperCase();
-      return `• [${tipoLabel}] ${i.descripcion}: S/${Number(i.monto).toFixed(2)}`;
-    }).join("\n");
-    try {
-      const res = await fetch("/api/informe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({
-          negocio: perfil?.negocio,
-          dueno: perfil?.dueno,
-          mesLabel,
-          regimen: perfil?.regimen,
-          desglose,
-          detalle,
-          totales: { ingresos: monthIngresos.toFixed(2), egresos: monthEgresos.toFixed(2), neto: monthNet },
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) setError(json.error || "No se pudo generar el informe.");
-      else setInforme(json.informe || "No se pudo generar el informe.");
-    } catch {
-      setError("Error de conexión con el servidor.");
-    }
-    setLoadingIA(false);
+      return { ...p, ingresos: ing, egresos: egr, neto: ing - egr, movimientos: items.length };
+    });
+    setAdminData(porNegocio);
+    setLoadingAdmin(false);
   }
+
+  useEffect(() => { if (view === "admin" && perfil?.rol === "admin") loadAdminData(); }, [view, currentMonth]);
 
   if (!previewMode && session === undefined) {
     return (
@@ -723,16 +694,44 @@ export default function App() {
                 {monthNet >= 0 ? "✅ Ganancia: " : "❌ Pérdida: "}{fmt(Math.abs(monthNet))}
               </div>
             </div>
-            <button onClick={generarInforme} disabled={allItems.length === 0 || loadingIA} style={{ width: "100%", background: C.accent, border: "none", borderRadius: 12, color: "#fff", fontSize: 15, fontWeight: 800, padding: "14px", cursor: "pointer", opacity: (allItems.length === 0 || loadingIA) ? 0.5 : 1, fontFamily: "'DM Sans',sans-serif", marginBottom: 8 }}>
-              {loadingIA ? "⏳ Generando informe..." : "📄 Generar Informe Mensual"}
-            </button>
-            {informe && !loadingIA && (
-              <div style={{ ...card, whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.8 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 12 }}>📊 {perfil.negocio} · {mesLabel}</div>
-                {informe}
+            {allItems.length === 0 ? (
+              <div style={{ textAlign: "center", color: C.dim, padding: "20px 0", fontSize: 13, fontStyle: "italic" }}>Primero registra movimientos diarios</div>
+            ) : (
+              <div style={card}>
+                <span style={lbl}>Ingresos por tipo</span>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 4 }}>
+                  <SumBox label="Efectivo" value={tipoTotales.efectivo} color={C.success} bg={C.successLight} border={C.successBorder} />
+                  <SumBox label="Yape" value={tipoTotales.yape} color={C.yape} bg={C.yapeLight} border={C.yapeBorder} />
+                  <SumBox label="Egresos" value={tipoTotales.egresos} color={C.danger} bg={C.dangerLight} border={C.dangerBorder} />
+                </div>
               </div>
             )}
-            {!informe && !loadingIA && <div style={{ textAlign: "center", color: C.dim, padding: "20px 0", fontSize: 13, fontStyle: "italic" }}>{allItems.length === 0 ? "Primero registra movimientos diarios" : "Presiona el botón para generar el informe"}</div>}
+          </div>
+        )}
+
+        {/* ADMIN */}
+        {view === "admin" && perfil?.rol === "admin" && (
+          <div className="fade">
+            <div style={card}>
+              <span style={lbl}>Todos los negocios · {mesLabel}</span>
+              {loadingAdmin ? (
+                <div style={{ textAlign: "center", color: C.muted, padding: "16px 0", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}><div style={spinner} /> Cargando...</div>
+              ) : !adminData || adminData.length === 0 ? (
+                <div style={{ textAlign: "center", color: C.dim, padding: "16px 0", fontSize: 13, fontStyle: "italic" }}>No hay negocios registrados</div>
+              ) : (
+                adminData.map(b => (
+                  <div key={b.id} style={{ padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700 }}>{b.negocio}</div>
+                        <div style={{ fontSize: 11, color: C.muted }}>{b.dueno || "—"} · {b.regimen} · {b.movimientos} mov.</div>
+                      </div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: b.neto >= 0 ? C.success : C.danger }}>{fmt(b.neto)}</div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -758,8 +757,14 @@ export default function App() {
             ))}
             <div onClick={() => { setView("report"); setDrawerOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", cursor: "pointer", background: view === "report" ? C.accentLight : "transparent", borderLeft: view === "report" ? `3px solid ${C.accent}` : "3px solid transparent" }}>
               <span style={{ fontSize: 18 }}>📊</span>
-              <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 600 }}>Informe Mensual</div><div style={{ fontSize: 11, color: C.muted }}>Análisis de rentabilidad</div></div>
+              <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 600 }}>Resumen Mensual</div><div style={{ fontSize: 11, color: C.muted }}>Ingresos y egresos del mes</div></div>
             </div>
+            {perfil?.rol === "admin" && (
+              <div onClick={() => { setView("admin"); setDrawerOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", cursor: "pointer", background: view === "admin" ? C.accentLight : "transparent", borderLeft: view === "admin" ? `3px solid ${C.accent}` : "3px solid transparent" }}>
+                <span style={{ fontSize: 18 }}>🛠️</span>
+                <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 600 }}>Panel Admin</div><div style={{ fontSize: 11, color: C.muted }}>Todos los negocios</div></div>
+              </div>
+            )}
             <div onClick={handleLogout} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", cursor: "pointer", marginTop: "auto", borderTop: `1px solid ${C.border}`, color: C.danger }}>
               <span style={{ fontSize: 18 }}>🚪</span>
               <div style={{ fontSize: 14, fontWeight: 600 }}>Cerrar sesión</div>
