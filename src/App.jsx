@@ -1,16 +1,14 @@
 import { useState, useEffect } from "react";
-
-const SUPABASE_URL = "https://mgvaguwofeyscbwifyjq.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ndmFndXdvZmV5c2Nid2lmeWpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0MjUxOTEsImV4cCI6MjA5MTAwMTE5MX0.nxJyVi8acRWHQBYT5dPPO1tNoGaD3PXr-6KbO0uYz_M";
-const SECRET = "NOVRUCN";
+import { supabase, dniRucToAuthEmail } from "./supabaseClient";
 
 const C = {
-  bg: "#f4f6fb", white: "#ffffff", border: "#e8edf5",
-  accent: "#2563eb", accentLight: "#eff6ff", accentBorder: "#bfdbfe",
-  success: "#16a34a", successLight: "#f0fdf4", successBorder: "#bbf7d0",
-  yape: "#7c3aed", yapeLight: "#f5f3ff", yapeBorder: "#ddd6fe",
-  danger: "#dc2626", dangerLight: "#fff1f2", dangerBorder: "#fecdd3",
-  text: "#0f172a", muted: "#64748b", dim: "#cbd5e1", overlay: "rgba(15,23,42,0.5)",
+  bg: "#0b0b0f", white: "#18181f", border: "#2a2a33",
+  accent: "#e4002b", accentLight: "#2a1015", accentBorder: "#5c1420",
+  success: "#4ade80", successLight: "#132118", successBorder: "#1f4a30",
+  yape: "#c4b5fd", yapeLight: "#211a35", yapeBorder: "#4c3d78",
+  danger: "#f87171", dangerLight: "#2a1416", dangerBorder: "#5c2328",
+  text: "#f4f4f6", muted: "#9a9aa5", dim: "#3d3d47", overlay: "rgba(0,0,0,0.75)",
+  brand: "#e4002b",
 };
 
 const fmt = (n) => `S/ ${Number(n || 0).toLocaleString("es-PE", { minimumFractionDigits: 2 })}`;
@@ -18,37 +16,52 @@ const todayStr = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
-const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" };
 
-async function dbGet(negocio, mes) {
-  try {
-    const [year, month] = mes.split("-").map(Number);
-    const lastDay = new Date(year, month, 0).getDate();
-    const lastDate = `${mes}-${String(lastDay).padStart(2, "0")}`;
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/registros?select=*&negocio=eq.${encodeURIComponent(negocio)}&fecha=gte.${mes}-01&fecha=lte.${lastDate}&order=id.asc`,
-      { headers }
-    );
-    if (!res.ok) return [];
-    return await res.json();
-  } catch { return []; }
+const inp = { background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 14, padding: "10px 13px", width: "100%", fontFamily: "'DM Sans',sans-serif", outline: "none" };
+const card = { background: C.white, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, marginBottom: 12 };
+const lbl = { fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 8, display: "block" };
+const spinner = { width: 15, height: 15, border: `2px solid ${C.border}`, borderTop: `2px solid ${C.accent}`, borderRadius: "50%", animation: "spin 0.8s linear infinite" };
+
+const GLOBAL_STYLE = `
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  input, select { color-scheme: dark; }
+  input:focus, select:focus { border-color: ${C.accent} !important; outline: none; box-shadow: 0 0 0 3px rgba(228,0,43,0.25); }
+  input::placeholder { color: ${C.dim}; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .fade { animation: fadeIn 0.25s ease; }
+  @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+  .slide { animation: slideIn 0.25s ease; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .quick-btn:active { transform: scale(0.96); }
+`;
+
+function isValidDniRuc(v) {
+  return /^\d{8}$|^\d{11}$/.test(v.trim());
+}
+
+async function dbGet(userId, mes) {
+  const [year, month] = mes.split("-").map(Number);
+  const lastDay = new Date(year, month, 0).getDate();
+  const lastDate = `${mes}-${String(lastDay).padStart(2, "0")}`;
+  const { data, error } = await supabase
+    .from("registros")
+    .select("*")
+    .eq("user_id", userId)
+    .gte("fecha", `${mes}-01`)
+    .lte("fecha", lastDate)
+    .order("id", { ascending: true });
+  if (error) return [];
+  return data || [];
 }
 
 async function dbInsert(row) {
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/registros`, {
-      method: "POST",
-      headers: { ...headers, Prefer: "return=minimal" },
-      body: JSON.stringify(row),
-    });
-    return res.ok || res.status === 201;
-  } catch { return false; }
+  const { error } = await supabase.from("registros").insert(row);
+  return !error;
 }
 
 async function dbDelete(id) {
-  try {
-    await fetch(`${SUPABASE_URL}/rest/v1/registros?id=eq.${id}`, { method: "DELETE", headers });
-  } catch {}
+  await supabase.from("registros").delete().eq("id", id);
 }
 
 function BarChart({ allItems, currentMonth }) {
@@ -85,17 +98,184 @@ function BarChart({ allItems, currentMonth }) {
   );
 }
 
+function SumBox({ label, value, color, bg, border }) {
+  return (
+    <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 12, padding: "12px 10px", textAlign: "center" }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color, letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 14, fontWeight: 800, color }}>{fmt(value)}</div>
+    </div>
+  );
+}
+
+function itemColor(tipo) {
+  if (tipo === "ingreso") return C.success;
+  if (tipo === "ingreso-yape") return C.yape;
+  return C.danger;
+}
+function itemLabel(tipo) {
+  if (tipo === "ingreso") return "Efectivo";
+  if (tipo === "ingreso-yape") return "Yape";
+  return "Egreso";
+}
+
 // Gastos fijos por defecto
 const DEFAULT_FIXED = [
   { id: "alquiler", label: "Alquiler", monto: 500, icon: "🏠" },
   { id: "internet", label: "Internet", monto: 20, icon: "📶" },
 ];
 
-export default function App() {
-  const [view, setView] = useState("daily");
-  const [negocio, setNegocio] = useState("Librería");
+function AuthScreen({ onPreview }) {
+  const [mode, setMode] = useState("login");
+  const [dniRuc, setDniRuc] = useState("");
+  const [password, setPassword] = useState("");
+  const [negocio, setNegocio] = useState("");
   const [dueno, setDueno] = useState("");
   const [regimen, setRegimen] = useState("NRUS");
+  const [emailContacto, setEmailContacto] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit() {
+    setError("");
+    if (!isValidDniRuc(dniRuc)) {
+      setError("Ingresa un DNI (8 dígitos) o RUC (11 dígitos) válido.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("La contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
+    if (mode === "signup" && !negocio.trim()) {
+      setError("Ingresa el nombre de tu negocio.");
+      return;
+    }
+    setLoading(true);
+    const email = dniRucToAuthEmail(dniRuc);
+
+    if (mode === "login") {
+      const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+      if (err) setError("DNI/RUC o contraseña incorrectos.");
+    } else {
+      const { data, error: err } = await supabase.auth.signUp({ email, password });
+      if (err) {
+        setError(
+          err.message.toLowerCase().includes("already") || err.message.toLowerCase().includes("exist")
+            ? "Ese DNI/RUC ya está registrado."
+            : "No se pudo registrar. Intenta de nuevo."
+        );
+      } else if (data.user) {
+        const { error: perfilErr } = await supabase.from("perfiles").insert({
+          id: data.user.id,
+          dni_ruc: dniRuc.trim(),
+          negocio: negocio.trim(),
+          dueno: dueno.trim() || null,
+          regimen,
+          email_contacto: emailContacto.trim() || null,
+        });
+        if (perfilErr) setError("Tu cuenta se creó, pero no se pudo guardar el perfil. Contáctanos.");
+      }
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'DM Sans', sans-serif", color: C.text, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <style>{GLOBAL_STYLE}</style>
+      <div style={{ width: "100%", maxWidth: 360 }}>
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <div style={{ fontSize: 34, fontWeight: 900, color: C.brand, letterSpacing: "1px", textTransform: "uppercase", fontFamily: "'DM Sans',sans-serif" }}>Chamba</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Control diario de ingresos y egresos</div>
+        </div>
+
+        <div style={{ display: "flex", marginBottom: 16, background: C.white, border: `1px solid ${C.border}`, borderRadius: 10, padding: 4 }}>
+          <button onClick={() => { setMode("login"); setError(""); }} style={{ flex: 1, padding: "9px", border: "none", borderRadius: 7, background: mode === "login" ? C.accent : "transparent", color: mode === "login" ? "#fff" : C.muted, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>Entrar</button>
+          <button onClick={() => { setMode("signup"); setError(""); }} style={{ flex: 1, padding: "9px", border: "none", borderRadius: 7, background: mode === "signup" ? C.accent : "transparent", color: mode === "signup" ? "#fff" : C.muted, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>Registrarme</button>
+        </div>
+
+        <div style={card}>
+          <span style={lbl}>DNI o RUC</span>
+          <input style={{ ...inp, marginBottom: 12 }} value={dniRuc} onChange={e => setDniRuc(e.target.value.replace(/\D/g, ""))} placeholder="Ej: 45678912" maxLength={11} inputMode="numeric" />
+
+          <span style={lbl}>Contraseña</span>
+          <input style={{ ...inp, marginBottom: mode === "signup" ? 12 : 0 }} type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" onKeyDown={e => e.key === "Enter" && mode === "login" && submit()} />
+
+          {mode === "signup" && (
+            <>
+              <span style={lbl}>Nombre del negocio</span>
+              <input style={{ ...inp, marginBottom: 12 }} value={negocio} onChange={e => setNegocio(e.target.value)} placeholder="Ej: Librería El Estudiante" />
+
+              <span style={lbl}>Dueño (opcional)</span>
+              <input style={{ ...inp, marginBottom: 12 }} value={dueno} onChange={e => setDueno(e.target.value)} placeholder="Tu nombre" />
+
+              <span style={lbl}>Régimen tributario</span>
+              <select style={{ ...inp, marginBottom: 12 }} value={regimen} onChange={e => setRegimen(e.target.value)}>
+                <option value="NRUS">NRUS</option><option value="RER">RER</option>
+                <option value="RMT">RMT</option><option value="General">General</option>
+                <option value="Informal">Informal</option>
+              </select>
+
+              <span style={lbl}>Email de contacto (opcional)</span>
+              <input style={{ ...inp, marginBottom: 12 }} type="email" value={emailContacto} onChange={e => setEmailContacto(e.target.value)} placeholder="Para soporte, no para iniciar sesión" />
+            </>
+          )}
+
+          {error && <div style={{ background: C.dangerLight, border: `1px solid ${C.dangerBorder}`, borderRadius: 9, padding: "9px 12px", fontSize: 12, color: C.danger, marginTop: 4, marginBottom: 4 }}>⚠️ {error}</div>}
+
+          <button onClick={submit} disabled={loading} style={{ width: "100%", background: C.accent, border: "none", borderRadius: 9, color: "#fff", fontSize: 14, fontWeight: 700, padding: "12px", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1, marginTop: 14, fontFamily: "'DM Sans',sans-serif" }}>
+            {loading ? "⏳ Un momento..." : mode === "login" ? "Entrar" : "Crear cuenta"}
+          </button>
+        </div>
+
+        {import.meta.env.DEV && (
+          <button onClick={onPreview} style={{ width: "100%", background: "transparent", border: "none", color: C.muted, fontSize: 12, padding: "14px 0 0", cursor: "pointer", textAlign: "center", textDecoration: "underline", fontFamily: "'DM Sans',sans-serif" }}>
+            👁️ Ver vista previa con datos de ejemplo (sin conexión)
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const PREVIEW_PERFIL = { negocio: "Bodega Don Chamba", dueno: "Juan Pérez", regimen: "NRUS" };
+
+function buildPreviewItems() {
+  const d = new Date();
+  const dateOffset = (n) => {
+    const x = new Date(d);
+    x.setDate(x.getDate() - n);
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+  };
+  return [
+    { id: "preview-1", fecha: dateOffset(0), descripcion: "Ventas del día, cuadernos", monto: 85, tipo: "ingreso" },
+    { id: "preview-2", fecha: dateOffset(0), descripcion: "Venta por Yape", monto: 45, tipo: "ingreso-yape" },
+    { id: "preview-3", fecha: dateOffset(0), descripcion: "Mercadería", monto: 60, tipo: "egreso" },
+    { id: "preview-4", fecha: dateOffset(1), descripcion: "Ventas del día", monto: 120, tipo: "ingreso" },
+    { id: "preview-5", fecha: dateOffset(1), descripcion: "Alquiler", monto: 150, tipo: "egreso" },
+    { id: "preview-6", fecha: dateOffset(3), descripcion: "Venta por Yape", monto: 70, tipo: "ingreso-yape" },
+    { id: "preview-7", fecha: dateOffset(3), descripcion: "Internet", monto: 20, tipo: "egreso" },
+    { id: "preview-8", fecha: dateOffset(5), descripcion: "Ventas del día", monto: 95, tipo: "ingreso" },
+  ];
+}
+
+const PREVIEW_INFORME = `Este mes te fue bien: vendiste más de lo que gastaste, y con margen. 👍
+
+La mayor parte de tu plata entró por ventas en efectivo, pero también tuviste un buen empujón por Yape — casi 3 de cada 10 soles que ganaste vinieron de ahí. Tus gastos fueron pocos y controlados: el alquiler fue lo más fuerte, el resto (mercadería, internet) fue chico.
+
+Algo que noté: tus ventas por Yape no son un detalle menor — ya son una parte real de tu negocio, no algo ocasional.
+
+Para el próximo mes:
+1. Anota tus gastos fijos (como el alquiler) apenas los pagues, no los dejes para último momento.
+2. Compará este mes con el anterior — así ves si estás creciendo o solo yendo parejo.
+3. Como buena parte de tu plata entra por Yape, ten en cuenta que SUNAT sí puede ver esos movimientos. Si el monto sigue subiendo, no está de más hablar con un contador para ver si te conviene formalizarte más o ajustar algo — mejor prevenir que tener un susto después.
+
+(Esto es una guía simple para orientarte, no un informe contable ni una asesoría legal formal. Este además es un ejemplo — con tus datos reales, el consejo va a ser específico a tu negocio.)`;
+
+export default function App() {
+  const [session, setSession] = useState(undefined); // undefined = cargando sesión
+  const [perfil, setPerfil] = useState(undefined); // undefined = cargando perfil
+  const [previewMode, setPreviewMode] = useState(false);
+
+  const [view, setView] = useState("daily");
   const [editingInfo, setEditingInfo] = useState(false);
   const [selectedDate, setSelectedDate] = useState(todayStr());
   const [allItems, setAllItems] = useState([]);
@@ -108,26 +288,44 @@ export default function App() {
   const [loadingIA, setLoadingIA] = useState(false);
   const [error, setError] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [showPassModal, setShowPassModal] = useState(false);
-  const [passInput, setPassInput] = useState("");
-  const [passError, setPassError] = useState("");
-  const [unlocked, setUnlocked] = useState(false);
 
-  // Gastos fijos editables
+  // Gastos fijos editables (locales, no persistidos)
   const [fixedExpenses, setFixedExpenses] = useState(DEFAULT_FIXED);
   const [editingFixed, setEditingFixed] = useState(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, sess) => setSession(sess));
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!session) { setPerfil(undefined); return; }
+    let cancelled = false;
+    supabase.from("perfiles").select("*").eq("id", session.user.id).single().then(({ data }) => {
+      if (!cancelled) setPerfil(data || { negocio: "Mi Negocio", dueno: "", regimen: "NRUS" });
+    });
+    return () => { cancelled = true; };
+  }, [session]);
 
   const currentMonth = selectedDate.slice(0, 7);
   const mesLabel = new Date(currentMonth + "-02").toLocaleString("es-PE", { month: "long", year: "numeric" });
 
   async function loadData() {
+    if (!session || previewMode) return;
     setLoadingData(true);
-    const data = await dbGet(negocio, currentMonth);
+    const data = await dbGet(session.user.id, currentMonth);
     setAllItems(data || []);
     setLoadingData(false);
   }
 
-  useEffect(() => { loadData(); }, [currentMonth, negocio]);
+  useEffect(() => { if (session && !previewMode) loadData(); }, [currentMonth, session, previewMode]);
+
+  function startPreview() {
+    setPerfil({ ...PREVIEW_PERFIL });
+    setAllItems(buildPreviewItems());
+    setPreviewMode(true);
+  }
 
   const dayItems = allItems.filter(r => r.fecha === selectedDate);
   const dayIngresos = dayItems.filter(r => r.tipo === "ingreso" || r.tipo === "ingreso-yape").reduce((s, r) => s + Number(r.monto), 0);
@@ -140,19 +338,29 @@ export default function App() {
 
   async function addItem() {
     if (!desc.trim() || !monto || saving) return;
+    if (previewMode) {
+      setAllItems(prev => [...prev, { id: `preview-${Date.now()}`, fecha: selectedDate, descripcion: desc.trim(), monto: Number(monto), tipo }]);
+      setDesc(""); setMonto("");
+      return;
+    }
+    if (!session) return;
     setSaving(true); setError("");
-    const row = { negocio, fecha: selectedDate, descripcion: desc.trim(), monto: Number(monto), tipo };
+    const row = { user_id: session.user.id, fecha: selectedDate, descripcion: desc.trim(), monto: Number(monto), tipo };
     const ok = await dbInsert(row);
     if (ok) { setDesc(""); setMonto(""); await loadData(); }
     else setError("No se pudo guardar. Verifica tu conexión.");
     setSaving(false);
   }
 
-  // Registrar gasto fijo con un toque
   async function addFixedExpense(fixed) {
     if (saving) return;
+    if (previewMode) {
+      setAllItems(prev => [...prev, { id: `preview-${Date.now()}`, fecha: selectedDate, descripcion: fixed.label, monto: fixed.monto, tipo: "egreso" }]);
+      return;
+    }
+    if (!session) return;
     setSaving(true); setError("");
-    const row = { negocio, fecha: selectedDate, descripcion: fixed.label, monto: fixed.monto, tipo: "egreso" };
+    const row = { user_id: session.user.id, fecha: selectedDate, descripcion: fixed.label, monto: fixed.monto, tipo: "egreso" };
     const ok = await dbInsert(row);
     if (ok) await loadData();
     else setError("No se pudo guardar.");
@@ -160,119 +368,122 @@ export default function App() {
   }
 
   async function removeItem(id) {
-    await dbDelete(id);
+    if (!previewMode) await dbDelete(id);
     setAllItems(prev => prev.filter(i => i.id !== id));
   }
 
-  function handleInformeClick() {
-    if (unlocked) { setView("report"); setDrawerOpen(false); }
-    else { setShowPassModal(true); setPassInput(""); setPassError(""); }
+  async function handleLogout() {
+    if (!previewMode) await supabase.auth.signOut();
+    setPreviewMode(false);
+    setDrawerOpen(false);
+    setView("daily");
+    setAllItems([]);
+    setInforme("");
   }
 
-  function handlePassSubmit() {
-    if (passInput === SECRET) { setUnlocked(true); setShowPassModal(false); setView("report"); setDrawerOpen(false); }
-    else setPassError("Contraseña incorrecta.");
+  async function commitPerfilEdits() {
+    if (previewMode) { setEditingInfo(false); return; }
+    if (!session || !perfil) { setEditingInfo(false); return; }
+    await supabase.from("perfiles").update({ negocio: perfil.negocio, dueno: perfil.dueno }).eq("id", session.user.id);
+    setEditingInfo(false);
+  }
+
+  async function handleRegimenChange(value) {
+    setPerfil(prev => (prev ? { ...prev, regimen: value } : prev));
+    if (session && !previewMode) await supabase.from("perfiles").update({ regimen: value }).eq("id", session.user.id);
   }
 
   async function generarInforme() {
     if (allItems.length === 0 || loadingIA) return;
-    setLoadingIA(true); setInforme("");
+    if (previewMode) {
+      setLoadingIA(true); setInforme(""); setError("");
+      setTimeout(() => { setInforme(PREVIEW_INFORME); setLoadingIA(false); }, 600);
+      return;
+    }
+    if (!session) return;
+    setLoadingIA(true); setInforme(""); setError("");
     const sortedDates = [...new Set(allItems.map(r => r.fecha))].sort((a, b) => b.localeCompare(a));
     const desglose = sortedDates.map(d => {
       const items = allItems.filter(r => r.fecha === d);
       const ing = items.filter(r => r.tipo === "ingreso" || r.tipo === "ingreso-yape").reduce((s, r) => s + Number(r.monto), 0);
       const egr = items.filter(r => r.tipo === "egreso").reduce((s, r) => s + Number(r.monto), 0);
-      const lbl = new Date(d + "T12:00:00").toLocaleDateString("es-PE", { weekday: "short", day: "numeric", month: "short" });
-      return `${lbl}: Ingresos S/${ing.toFixed(2)}, Egresos S/${egr.toFixed(2)}, Neto S/${(ing - egr).toFixed(2)}`;
+      const dlbl = new Date(d + "T12:00:00").toLocaleDateString("es-PE", { weekday: "short", day: "numeric", month: "short" });
+      return `${dlbl}: Ingresos S/${ing.toFixed(2)}, Egresos S/${egr.toFixed(2)}, Neto S/${(ing - egr).toFixed(2)}`;
     }).join("\n");
     const detalle = allItems.map(i => {
       const tipoLabel = i.tipo === "ingreso-yape" ? "INGRESO YAPE" : i.tipo.toUpperCase();
       return `• [${tipoLabel}] ${i.descripcion}: S/${Number(i.monto).toFixed(2)}`;
     }).join("\n");
-    const prompt = `Eres un asesor financiero experto en pequeñas empresas peruanas. Genera un informe de rentabilidad mensual claro y amigable. USA EMOJIS. Español peruano sencillo.
-
-Secciones:
-📋 RESUMEN DEL MES
-💰 ANÁLISIS DE INGRESOS (diferencia entre efectivo y Yape si aplica)
-💸 ANÁLISIS DE EGRESOS
-📊 RESULTADO FINAL
-✅ 3 RECOMENDACIONES CONCRETAS
-⚠️ ALERTA SUNAT (régimen ${regimen})
-
-DATOS: Negocio: ${negocio} | Dueño: ${dueno || "No especificado"} | Mes: ${mesLabel} | Régimen: ${regimen}
-POR DÍA:\n${desglose}
-DETALLE:\n${detalle}
-TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFixed(2)} | Neto S/${monthNet.toFixed(2)} (${monthNet >= 0 ? "GANANCIA" : "PÉRDIDA"})`;
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
+      const res = await fetch("/api/informe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          negocio: perfil?.negocio,
+          dueno: perfil?.dueno,
+          mesLabel,
+          regimen: perfil?.regimen,
+          desglose,
+          detalle,
+          totales: { ingresos: monthIngresos.toFixed(2), egresos: monthEgresos.toFixed(2), neto: monthNet },
+        }),
       });
       const json = await res.json();
-      setInforme(json.content?.map(b => b.text || "").join("") || "Error al generar.");
-    } catch { setInforme("Error de conexión."); }
+      if (!res.ok) setError(json.error || "No se pudo generar el informe.");
+      else setInforme(json.informe || "No se pudo generar el informe.");
+    } catch {
+      setError("Error de conexión con el servidor.");
+    }
     setLoadingIA(false);
   }
 
-  const inp = { background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 14, padding: "10px 13px", width: "100%", fontFamily: "'DM Sans',sans-serif", outline: "none" };
-  const card = { background: C.white, border: `1px solid ${C.border}`, borderRadius: 14, padding: 16, marginBottom: 12 };
-  const lbl = { fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 8, display: "block" };
-  const spinner = { width: 15, height: 15, border: `2px solid ${C.border}`, borderTop: `2px solid ${C.accent}`, borderRadius: "50%", animation: "spin 0.8s linear infinite" };
-
-  // Color por tipo de item
-  function itemColor(tipo) {
-    if (tipo === "ingreso") return C.success;
-    if (tipo === "ingreso-yape") return C.yape;
-    return C.danger;
-  }
-  function itemLabel(tipo) {
-    if (tipo === "ingreso") return "Efectivo";
-    if (tipo === "ingreso-yape") return "Yape";
-    return "Egreso";
-  }
-
-  function SumBox({ label, value, color, bg, border }) {
+  if (!previewMode && session === undefined) {
     return (
-      <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 12, padding: "12px 10px", textAlign: "center" }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color, letterSpacing: "0.5px", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
-        <div style={{ fontSize: 14, fontWeight: 800, color }}>{fmt(value)}</div>
+      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={spinner} />
+      </div>
+    );
+  }
+
+  if (!session && !previewMode) return <AuthScreen onPreview={startPreview} />;
+
+  if (!previewMode && perfil === undefined) {
+    return (
+      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={spinner} />
       </div>
     );
   }
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'DM Sans', sans-serif", color: C.text }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        input:focus, select:focus { border-color: #2563eb !important; outline: none; box-shadow: 0 0 0 3px #eff6ff; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-        .fade { animation: fadeIn 0.25s ease; }
-        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
-        .slide { animation: slideIn 0.25s ease; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .quick-btn:active { transform: scale(0.96); }
-      `}</style>
+      <style>{GLOBAL_STYLE}</style>
+
+      {previewMode && (
+        <div style={{ background: C.brand, color: "#fff", textAlign: "center", fontSize: 12, fontWeight: 700, padding: "6px 12px" }}>
+          👁️ VISTA PREVIA — datos de ejemplo, nada se guarda de verdad
+        </div>
+      )}
 
       {/* HEADER */}
       <div style={{ background: C.white, borderBottom: `1px solid ${C.border}`, padding: "0 16px", position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ maxWidth: 480, margin: "0 auto", padding: "16px 0", display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 42, height: 42, background: `linear-gradient(135deg, ${C.accent}, #1d4ed8)`, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color: "#fff", flexShrink: 0 }}>F</div>
+          <div style={{ width: 42, height: 42, background: "#ffffff", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 900, color: C.brand, flexShrink: 0 }}>C</div>
           <div style={{ flex: 1 }}>
             {editingInfo ? (
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <input style={{ ...inp, padding: "6px 10px", fontSize: 13 }} value={negocio} onChange={e => setNegocio(e.target.value)} placeholder="Negocio" />
-                <input style={{ ...inp, padding: "6px 10px", fontSize: 13 }} value={dueno} onChange={e => setDueno(e.target.value)} placeholder="Dueño" />
-                <button onClick={() => setEditingInfo(false)} style={{ background: C.accent, border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, padding: "6px 12px", cursor: "pointer", fontSize: 12, whiteSpace: "nowrap" }}>OK</button>
+                <input style={{ ...inp, padding: "6px 10px", fontSize: 13 }} value={perfil.negocio} onChange={e => setPerfil(prev => ({ ...prev, negocio: e.target.value }))} placeholder="Negocio" />
+                <input style={{ ...inp, padding: "6px 10px", fontSize: 13 }} value={perfil.dueno || ""} onChange={e => setPerfil(prev => ({ ...prev, dueno: e.target.value }))} placeholder="Dueño" />
+                <button onClick={commitPerfilEdits} style={{ background: C.accent, border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, padding: "6px 12px", cursor: "pointer", fontSize: 12, whiteSpace: "nowrap" }}>OK</button>
               </div>
             ) : (
               <div onClick={() => setEditingInfo(true)} style={{ cursor: "pointer" }}>
-                <div style={{ fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: "-0.5px" }}>{negocio}</div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{dueno || "Toca para editar"} · {regimen}</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: "-0.5px" }}>{perfil.negocio}</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{perfil.dueno || "Toca para editar"} · {perfil.regimen}</div>
               </div>
             )}
           </div>
-          <select style={{ ...inp, width: "auto", padding: "6px 9px", fontSize: 11, marginRight: 6 }} value={regimen} onChange={e => setRegimen(e.target.value)}>
+          <select style={{ ...inp, width: "auto", padding: "6px 9px", fontSize: 11, marginRight: 6 }} value={perfil.regimen} onChange={e => handleRegimenChange(e.target.value)}>
             <option value="NRUS">NRUS</option><option value="RER">RER</option>
             <option value="RMT">RMT</option><option value="General">General</option>
             <option value="Informal">Informal</option>
@@ -309,7 +520,6 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
             <div style={card}>
               <span style={{ ...lbl, marginBottom: 10 }}>Nuevo movimiento</span>
 
-              {/* Tipo selector - 3 opciones */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
                 <button onClick={() => setTipo("ingreso")} style={{ padding: "10px 6px", border: `1px solid ${tipo === "ingreso" ? C.successBorder : C.border}`, borderRadius: 9, background: tipo === "ingreso" ? C.successLight : C.white, color: tipo === "ingreso" ? C.success : C.muted, fontWeight: tipo === "ingreso" ? 700 : 500, fontSize: 12, cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
                   💵 Efectivo
@@ -322,7 +532,6 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
                 </button>
               </div>
 
-              {/* Gastos fijos rápidos - solo cuando es egreso */}
               {tipo === "egreso" && (
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 8 }}>⚡ Gastos fijos</div>
@@ -344,7 +553,6 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
                     ))}
                   </div>
 
-                  {/* Editor de monto fijo */}
                   {editingFixed && (
                     <div style={{ marginTop: 10, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, padding: 12 }}>
                       <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 8 }}>
@@ -375,7 +583,6 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
               </button>
             </div>
 
-            {/* Items del día */}
             <div style={card}>
               <span style={lbl}>Movimientos del día</span>
               {loadingData ? <div style={{ textAlign: "center", color: C.muted, padding: "16px 0", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}><div style={spinner} /> Cargando...</div>
@@ -391,7 +598,6 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
                   ))}
             </div>
 
-            {/* Resumen mes + gráfico */}
             <div style={card}>
               <span style={lbl}>📈 Resumen {mesLabel}</span>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
@@ -469,7 +675,7 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
             </button>
             {informe && !loadingIA && (
               <div style={{ ...card, whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.8 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 12 }}>📊 {negocio} · {mesLabel}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 12 }}>📊 {perfil.negocio} · {mesLabel}</div>
                 {informe}
               </div>
             )}
@@ -483,8 +689,8 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
         <div style={{ position: "fixed", inset: 0, background: C.overlay, zIndex: 100, display: "flex", justifyContent: "flex-end" }} onClick={() => setDrawerOpen(false)}>
           <div className="slide" style={{ width: 260, background: C.white, borderLeft: `1px solid ${C.border}`, height: "100%", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
             <div style={{ padding: "24px 20px 16px", borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ fontSize: 18, fontWeight: 800 }}>{negocio}</div>
-              <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>FinanzasPyme</div>
+              <div style={{ fontSize: 18, fontWeight: 800 }}>{perfil.negocio}</div>
+              <div style={{ fontSize: 11, fontWeight: 900, color: C.brand, letterSpacing: "0.5px", textTransform: "uppercase", marginTop: 2 }}>Chamba</div>
             </div>
             {[["daily", "📝", "Registro Diario", "Ingresos y egresos del día"], ["history", "📅", "Historial", "Movimientos por mes"]].map(([v, icon, label, sub]) => (
               <div key={v} onClick={() => { setView(v); setDrawerOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", cursor: "pointer", background: view === v ? C.accentLight : "transparent", borderLeft: view === v ? `3px solid ${C.accent}` : "3px solid transparent" }}>
@@ -492,26 +698,14 @@ TOTALES: Ingresos S/${monthIngresos.toFixed(2)} | Egresos S/${monthEgresos.toFix
                 <div><div style={{ fontSize: 14, fontWeight: 600 }}>{label}</div><div style={{ fontSize: 11, color: C.muted }}>{sub}</div></div>
               </div>
             ))}
-            <div onClick={handleInformeClick} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", cursor: "pointer", background: view === "report" ? C.accentLight : "transparent", borderLeft: view === "report" ? `3px solid ${C.accent}` : "3px solid transparent", marginTop: "auto", borderTop: `1px solid ${C.border}` }}>
+            <div onClick={() => { setView("report"); setDrawerOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", cursor: "pointer", background: view === "report" ? C.accentLight : "transparent", borderLeft: view === "report" ? `3px solid ${C.accent}` : "3px solid transparent" }}>
               <span style={{ fontSize: 18 }}>📊</span>
               <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 600 }}>Informe Mensual</div><div style={{ fontSize: 11, color: C.muted }}>Análisis de rentabilidad</div></div>
-              {!unlocked && <span style={{ fontSize: 14, color: C.muted }}>🔒</span>}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* PASSWORD MODAL */}
-      {showPassModal && (
-        <div style={{ position: "fixed", inset: 0, background: C.overlay, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 20px" }}>
-          <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 16, padding: 24, width: "100%", maxWidth: 320 }}>
-            <div style={{ fontSize: 32, textAlign: "center", marginBottom: 8 }}>🔒</div>
-            <div style={{ fontSize: 16, fontWeight: 800, textAlign: "center", marginBottom: 4 }}>Acceso restringido</div>
-            <div style={{ fontSize: 13, color: C.muted, textAlign: "center", marginBottom: 20 }}>Ingresa la contraseña de administrador</div>
-            <input autoFocus style={{ ...inp, fontSize: 18, textAlign: "center", letterSpacing: "4px" }} type="password" value={passInput} onChange={e => setPassInput(e.target.value)} placeholder="••••••••" onKeyDown={e => e.key === "Enter" && handlePassSubmit()} />
-            {passError && <div style={{ fontSize: 12, color: C.danger, textAlign: "center", marginTop: 8 }}>{passError}</div>}
-            <button onClick={handlePassSubmit} style={{ width: "100%", background: C.accent, border: "none", borderRadius: 9, color: "#fff", fontSize: 14, fontWeight: 700, padding: "12px", cursor: "pointer", marginTop: 12, fontFamily: "'DM Sans',sans-serif" }}>Ingresar</button>
-            <button onClick={() => setShowPassModal(false)} style={{ width: "100%", background: "transparent", border: `1px solid ${C.border}`, borderRadius: 9, color: C.muted, fontSize: 14, padding: "10px", cursor: "pointer", marginTop: 8, fontFamily: "'DM Sans',sans-serif" }}>Cancelar</button>
+            <div onClick={handleLogout} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", cursor: "pointer", marginTop: "auto", borderTop: `1px solid ${C.border}`, color: C.danger }}>
+              <span style={{ fontSize: 18 }}>🚪</span>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>Cerrar sesión</div>
+            </div>
           </div>
         </div>
       )}
